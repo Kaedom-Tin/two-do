@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#3D5A80">
+<title>Two Do — v0.1.0</title>
+<style>
+  :root {
+    --bg: #F7F7F5;
+    --surface: #FFFFFF;
+    --border: #E2E2DF;
+    --text: #1E1E1C;
+    --text-muted: #6B6B66;
+    --accent: #3D5A80;
+    --accent-contrast: #FFFFFF;
+    --danger: #B3261E;
+    --col-bg: #EFEFEC;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 8px;
+  }
+  input, textarea, select {
+    font-family: inherit; font-size: 16px;
+  }
+  #app { min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* --- Centered screens (loading / sign-in / setup) --- */
+  .center-screen {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 24px; text-align: center; gap: 16px;
+  }
+  .wordmark { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .tagline { color: var(--text-muted); font-size: 15px; margin-top: -8px; }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-contrast);
+    padding: 12px 20px; font-size: 15px; font-weight: 600; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .btn-secondary {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    padding: 12px 20px; font-size: 15px; font-weight: 600; border-radius: 10px;
+  }
+  .btn-text { background: none; color: var(--accent); font-size: 14px; font-weight: 600; padding: 6px; }
+  .google-icon { width: 18px; height: 18px; background: #fff; border-radius: 3px; padding: 2px; }
+
+  .setup-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; width: 100%; max-width: 360px; text-align: left;
+  }
+  .setup-card h2 { margin: 0 0 4px; font-size: 18px; }
+  .setup-card p.hint { color: var(--text-muted); font-size: 13px; margin: 0 0 14px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg);
+  }
+  .error-msg { color: var(--danger); font-size: 13px; margin-top: 8px; }
+  .setup-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .setup-toggle button {
+    flex: 1; padding: 10px; background: var(--col-bg); font-size: 14px; font-weight: 600; color: var(--text-muted);
+  }
+  .setup-toggle button.active { background: var(--accent); color: var(--accent-contrast); }
+
+  /* --- Board screen --- */
+  .board-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .board-header .title { font-size: 17px; font-weight: 700; }
+  .board-header .code-pill {
+    font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;
+  }
+  .code-pill button { background: var(--col-bg); color: var(--text); padding: 3px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+  .icon-btn { background: none; color: var(--text-muted); font-size: 13px; padding: 6px; }
+
+  .board-grid {
+    flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px; padding: 8px; overflow: hidden;
+  }
+  .column {
+    background: var(--col-bg); border-radius: 10px; padding: 6px;
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .column-header {
+    padding: 2px 4px 6px; display: flex; align-items: baseline; justify-content: space-between; gap: 4px;
+  }
+  .column-header .name { font-weight: 700; font-size: 12px; line-height: 1.2; flex: 1; min-width: 0; }
+  .column-header .count { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+  .column-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+  .empty-col { color: var(--text-muted); font-size: 11px; text-align: center; padding: 10px 4px; }
+
+  .chip {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 7px; font-size: 12px; cursor: pointer;
+  }
+  .chip-title {
+    font-weight: 600; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .chip-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; min-height: 16px; }
+  .chip-assignee {
+    width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: #fff;
+    font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .chip-due { font-size: 9px; color: var(--text-muted); margin-left: auto; }
+
+  .add-task-btn {
+    background: none; border: 1.5px dashed var(--border); color: var(--text-muted);
+    padding: 6px; border-radius: 8px; font-size: 11px; font-weight: 600; text-align: center;
+  }
+
+  /* --- Bottom-sheet overlay (chip expand / add task) --- */
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50;
+    display: flex; align-items: flex-end;
+  }
+  .sheet-card {
+    background: var(--surface); width: 100%; max-height: 85vh; overflow-y: auto;
+    border-radius: 16px 16px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  }
+  .sheet-card h2 { margin: 0 0 12px; font-size: 16px; }
+  .chip-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .chip-actions .btn-primary, .chip-actions .btn-secondary { padding: 10px 14px; font-size: 14px; flex: 1; justify-content: center; }
+  .delete-link { color: var(--danger); background: none; font-size: 13px; font-weight: 600; padding: 8px; width: 100%; margin-top: 4px; }
+  .delete-confirm {
+    display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px;
+    background: var(--col-bg); border-radius: 8px;
+  }
+  .delete-confirm span { flex: 1; font-size: 13px; font-weight: 600; }
+  .delete-confirm .btn-secondary, .delete-confirm .btn-danger { padding: 8px 12px; font-size: 13px; }
+  .btn-danger { background: var(--danger); color: #fff; font-weight: 600; }
+
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="center-screen"><div class="spinner"></div></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import {
+  getDatabase, ref, get, set, update, push, remove, onValue
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA0t4HwloOzdHM9yTtRsRHWyBJuKvG8SoE",
+  authDomain: "two-do-family.firebaseapp.com",
+  databaseURL: "https://two-do-family-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "two-do-family",
+  storageBucket: "two-do-family.firebasestorage.app",
+  messagingSenderId: "181758224160",
+  appId: "1:181758224160:web:e9eba63bf138d0070a1945"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const provider = new GoogleAuthProvider();
+
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
+const CODE_LENGTH = 8;
+
+const appEl = document.getElementById("app");
+
+let state = {
+  user: null,
+  householdId: null,
+  household: null,     // { meta, members, columns }
+  tasks: {},           // taskId -> task
+  expanded: null,       // taskId or "new-<columnId>" currently expanded
+  confirmingDelete: null, // taskId currently showing the delete confirm step, or null
+  setupMode: "create",  // "create" | "join"
+  setupError: ""
+};
+
+let householdListenerUnsub = null;
+let tasksListenerUnsub = null;
+
+// ---------- helpers ----------
+
+function generateCode() {
+  let code = "";
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+function initials(name) {
+  if (!name) return "?";
+  return name.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase();
+}
+
+function formatDateDMY(isoDate) {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+// ---------- auth ----------
+
+onAuthStateChanged(auth, (user) => {
+  state.user = user;
+  detachListeners();
+  state.householdId = null;
+  state.household = null;
+  state.tasks = {};
+  if (user) {
+    loadUserHouseholds(user.uid);
+  } else {
+    render();
+  }
+});
+
+async function loadUserHouseholds(uid) {
+  const snap = await get(ref(db, `users/${uid}/householdIds`));
+  if (snap.exists()) {
+    const ids = Object.keys(snap.val());
+    state.householdId = ids[0]; // v0.1.0: single household per user
+    attachHouseholdListeners(state.householdId);
+  } else {
+    render();
+  }
+}
+
+function attachHouseholdListeners(householdId) {
+  householdListenerUnsub = onValue(ref(db, `households/${householdId}`), (snap) => {
+    state.household = snap.val();
+    render();
+  });
+  tasksListenerUnsub = onValue(ref(db, `households/${householdId}/tasks`), (snap) => {
+    state.tasks = snap.val() || {};
+    render();
+  });
+}
+
+function detachListeners() {
+  if (householdListenerUnsub) { householdListenerUnsub(); householdListenerUnsub = null; }
+  if (tasksListenerUnsub) { tasksListenerUnsub(); tasksListenerUnsub = null; }
+}
+
+window.handleSignIn = async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+window.handleSignOut = async () => {
+  await signOut(auth);
+};
+
+// ---------- household create / join ----------
+
+window.setSetupMode = (mode) => {
+  state.setupMode = mode;
+  state.setupError = "";
+  render();
+};
+
+window.handleCreateHousehold = async (formEl) => {
+  const name = formEl.householdName.value.trim();
+  if (!name) { state.setupError = "Enter a household name."; render(); return; }
+  const uid = state.user.uid;
+  const displayName = state.user.displayName || state.user.email || "Member";
+
+  const newRef = push(ref(db, "households"));
+  const householdId = newRef.key;
+
+  let code = generateCode();
+  let attempts = 0;
+  while ((await get(ref(db, `joinCodes/${code}`))).exists() && attempts < 10) {
+    code = generateCode();
+    attempts++;
+  }
+
+  const now = Date.now();
+  await set(newRef, {
+    meta: { name, createdBy: uid, createdAt: now, code },
+    members: {
+      [uid]: { role: "admin", joinedAt: now, displayName }
+    },
+    columns: {
+      col1: { name: "To Do", order: 0 },
+      col2: { name: "In Progress", order: 1 },
+      col3: { name: "Done", order: 2 }
+    }
+  });
+  await set(ref(db, `joinCodes/${code}`), householdId);
+  await set(ref(db, `users/${uid}/householdIds/${householdId}`), true);
+
+  state.householdId = householdId;
+  attachHouseholdListeners(householdId);
+};
+
+window.handleJoinHousehold = async (formEl) => {
+  const rawCode = formEl.joinCode.value.trim().toUpperCase();
+  if (rawCode.length !== CODE_LENGTH) {
+    state.setupError = `Code should be ${CODE_LENGTH} characters.`;
+    render();
+    return;
+  }
+  const snap = await get(ref(db, `joinCodes/${rawCode}`));
+  if (!snap.exists()) {
+    state.setupError = "That code wasn't found. Check it and try again.";
+    render();
+    return;
+  }
+  const householdId = snap.val();
+  const uid = state.user.uid;
+  const displayName = state.user.displayName || state.user.email || "Member";
+  const now = Date.now();
+
+  await set(ref(db, `households/${householdId}/members/${uid}`), {
+    role: "member", joinedAt: now, displayName
+  });
+  await set(ref(db, `users/${uid}/householdIds/${householdId}`), true);
+
+  state.householdId = householdId;
+  attachHouseholdListeners(householdId);
+};
+
+window.copyCode = async (code) => {
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch (e) { /* clipboard unavailable, ignore */ }
+};
+
+// ---------- tasks ----------
+
+window.toggleExpand = (key) => {
+  state.expanded = (state.expanded === key) ? null : key;
+  state.confirmingDelete = null;
+  render();
+};
+
+window.closeSheet = () => {
+  state.expanded = null;
+  state.confirmingDelete = null;
+  render();
+};
+
+window.handleAddTask = async (columnId, formEl) => {
+  const title = formEl.title.value.trim();
+  if (!title) return;
+  const notes = formEl.notes.value.trim();
+  const assignee = formEl.assignee.value;
+  const dueDate = formEl.dueDate.value;
+
+  const newRef = push(ref(db, `households/${state.householdId}/tasks`));
+  await set(newRef, {
+    title, notes, assignee, dueDate, columnId,
+    order: Date.now(), updatedAt: Date.now()
+  });
+  state.expanded = null;
+  render();
+};
+
+window.handleSaveTask = async (taskId, formEl) => {
+  const title = formEl.title.value.trim();
+  if (!title) return;
+  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), {
+    title,
+    notes: formEl.notes.value.trim(),
+    assignee: formEl.assignee.value,
+    dueDate: formEl.dueDate.value,
+    updatedAt: Date.now()
+  });
+  state.expanded = null;
+  render();
+};
+
+window.handleDeleteTask = async (taskId) => {
+  await remove(ref(db, `households/${state.householdId}/tasks/${taskId}`));
+  state.expanded = null;
+  state.confirmingDelete = null;
+  render();
+};
+
+// ---------- render ----------
+
+function render() {
+  if (state.user === undefined) return;
+  if (!state.user) return renderSignIn();
+  if (!state.householdId || !state.household) return renderSetup();
+  return renderBoard();
+}
+
+function renderSignIn() {
+  appEl.innerHTML = `
+    <div class="center-screen">
+      <div class="wordmark">Two Do</div>
+      <div class="tagline">One list, everyone in the house.</div>
+      <button class="btn-primary" onclick="handleSignIn()">
+        <svg class="google-icon" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4c-7.6 0-14.1 4.3-17.4 10.7z"/><path fill="#4CAF50" d="M24 44c5.4 0 10.3-1.8 14-5l-6.5-5.5C29.4 35 26.9 36 24 36c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5C9.8 39.6 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.5l6.5 5.5C40.8 36.5 44 30.9 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+        Sign in with Google
+      </button>
+    </div>`;
+}
+
+function renderSetup() {
+  const isCreate = state.setupMode === "create";
+  appEl.innerHTML = `
+    <div class="center-screen">
+      <div class="wordmark" style="font-size:20px;">Two Do</div>
+      <div class="setup-card">
+        <div class="setup-toggle">
+          <button class="${isCreate ? "active" : ""}" onclick="setSetupMode('create')">Create household</button>
+          <button class="${!isCreate ? "active" : ""}" onclick="setSetupMode('join')">Join household</button>
+        </div>
+        ${isCreate ? `
+          <h2>Start a new household</h2>
+          <p class="hint">You'll get a code to share with family so they can join.</p>
+          <form onsubmit="event.preventDefault(); handleCreateHousehold(this);">
+            <div class="field">
+              <label>Household name</label>
+              <input name="householdName" placeholder="e.g. The Smiths" autocomplete="off" required>
+            </div>
+            <button class="btn-primary" style="width:100%; justify-content:center;" type="submit">Create household</button>
+          </form>
+        ` : `
+          <h2>Join a household</h2>
+          <p class="hint">Enter the ${CODE_LENGTH}-character code someone shared with you.</p>
+          <form onsubmit="event.preventDefault(); handleJoinHousehold(this);">
+            <div class="field">
+              <label>Household code</label>
+              <input name="joinCode" placeholder="e.g. 7F3KQ2XR" maxlength="${CODE_LENGTH}" style="text-transform:uppercase; letter-spacing:1px;" autocomplete="off" required>
+            </div>
+            <button class="btn-primary" style="width:100%; justify-content:center;" type="submit">Join household</button>
+          </form>
+        `}
+        ${state.setupError ? `<div class="error-msg">${escapeHtml(state.setupError)}</div>` : ""}
+      </div>
+      <button class="btn-text" onclick="handleSignOut()">Sign out</button>
+    </div>`;
+}
+
+function renderBoard() {
+  const h = state.household;
+  const columns = Object.entries(h.columns || {})
+    .map(([id, c]) => ({ id, ...c }))
+    .sort((a, b) => a.order - b.order);
+  const members = h.members || {};
+  const tasksByColumn = {};
+  Object.entries(state.tasks).forEach(([id, t]) => {
+    if (!tasksByColumn[t.columnId]) tasksByColumn[t.columnId] = [];
+    tasksByColumn[t.columnId].push({ id, ...t });
+  });
+  Object.values(tasksByColumn).forEach(list => list.sort((a, b) => a.order - b.order));
+
+  appEl.innerHTML = `
+    <div class="board-header">
+      <div>
+        <div class="title">${escapeHtml(h.meta.name)}</div>
+        <div class="code-pill">
+          Invite code: <button onclick="copyCode('${h.meta.code}')">${h.meta.code}</button>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="handleSignOut()">Sign out</button>
+    </div>
+    <div class="board-grid">
+      ${columns.map(col => renderColumn(col, tasksByColumn[col.id] || [], members)).join("")}
+    </div>
+    ${renderSheet(members)}`;
+}
+
+function renderColumn(col, tasks, members) {
+  return `
+    <div class="column">
+      <div class="column-header">
+        <div class="name">${escapeHtml(col.name)}</div>
+        <div class="count">${tasks.length}</div>
+      </div>
+      <div class="column-body">
+        ${tasks.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
+        ${tasks.map(t => renderChip(t, members)).join("")}
+        <button class="add-task-btn" onclick="toggleExpand('new-${col.id}')">+ Add</button>
+      </div>
+    </div>`;
+}
+
+function renderChip(task, members) {
+  const assigneeMember = members[task.assignee];
+  return `
+    <div class="chip" onclick="toggleExpand('${task.id}')">
+      <div class="chip-title">${escapeHtml(task.title)}</div>
+      ${(assigneeMember || task.dueDate) ? `
+        <div class="chip-meta">
+          ${assigneeMember ? `<div class="chip-assignee">${initials(assigneeMember.displayName)}</div>` : `<span></span>`}
+          ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
+        </div>
+      ` : ""}
+    </div>`;
+}
+
+// Renders the bottom-sheet overlay for either editing an existing task
+// (state.expanded === taskId) or adding a new one (state.expanded === "new-<columnId>").
+// Returns "" when nothing is expanded, so it's safe to always call from renderBoard.
+function renderSheet(members) {
+  if (!state.expanded) return "";
+
+  const memberOptions = (selectedUid) => Object.entries(members).map(([uid, m]) => `
+    <option value="${uid}" ${selectedUid === uid ? "selected" : ""}>${escapeHtml(m.displayName)}</option>
+  `).join("");
+
+  if (state.expanded.startsWith("new-")) {
+    const columnId = state.expanded.slice(4);
+    return `
+      <div class="sheet-backdrop" onclick="if(event.target===this) closeSheet();">
+        <div class="sheet-card">
+          <h2>Add task</h2>
+          <form onsubmit="event.preventDefault(); handleAddTask('${columnId}', this);">
+            <div class="field">
+              <label>Title</label>
+              <input name="title" placeholder="Task title" autofocus required>
+            </div>
+            <div class="field">
+              <label>Assignee</label>
+              <select name="assignee"><option value="">Unassigned</option>${memberOptions(null)}</select>
+            </div>
+            <div class="field">
+              <label>Due date</label>
+              <input type="date" name="dueDate">
+            </div>
+            <div class="field">
+              <label>Notes</label>
+              <textarea name="notes" rows="2" placeholder="Optional"></textarea>
+            </div>
+            <div class="chip-actions">
+              <button type="submit" class="btn-primary">Add task</button>
+              <button type="button" class="btn-secondary" onclick="closeSheet()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+  }
+
+  const task = state.tasks[state.expanded];
+  if (!task) return "";
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeSheet();">
+      <div class="sheet-card">
+        <h2>Edit task</h2>
+        <form onsubmit="event.preventDefault(); handleSaveTask('${state.expanded}', this);">
+          <div class="field">
+            <label>Title</label>
+            <input name="title" value="${escapeHtml(task.title)}" required>
+          </div>
+          <div class="field">
+            <label>Assignee</label>
+            <select name="assignee"><option value="">Unassigned</option>${memberOptions(task.assignee)}</select>
+          </div>
+          <div class="field">
+            <label>Due date</label>
+            <input type="date" name="dueDate" value="${task.dueDate || ""}">
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <textarea name="notes" rows="2">${escapeHtml(task.notes || "")}</textarea>
+          </div>
+          <div class="chip-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" class="btn-secondary" onclick="closeSheet()">Cancel</button>
+          </div>
+        </form>
+        ${state.confirmingDelete === state.expanded ? `
+          <div class="delete-confirm">
+            <span>Delete this task?</span>
+            <button class="btn-secondary" onclick="state.confirmingDelete=null; render();">Cancel</button>
+            <button class="btn-danger" onclick="handleDeleteTask('${state.expanded}')">Delete</button>
+          </div>
+        ` : `
+          <button class="delete-link" onclick="state.confirmingDelete='${state.expanded}'; render();">Delete task</button>
+        `}
+      </div>
+    </div>`;
+}
+
+render();
+</script>
+</body>
+</html>
