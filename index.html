@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#3D5A80">
-<title>Two Do — v0.2.0</title>
+<title>Two Do — v0.3.0</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -61,7 +61,7 @@
     flex: 1; display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 24px; text-align: center; gap: 16px;
   }
-  .wordmark { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .wordmark { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
   .tagline { color: var(--text-muted); font-size: 15px; margin-top: -8px; }
   .btn-primary {
     background: var(--accent); color: var(--accent-contrast);
@@ -99,7 +99,7 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
   }
-  .board-header .title { font-size: 17px; font-weight: 700; }
+  .board-header .title { font-size: 17px; font-weight: 700; color: var(--text); }
   .icon-btn {
     background: none; color: var(--text); padding: 6px; display: flex; align-items: center; justify-content: center;
   }
@@ -125,40 +125,61 @@
   }
   .theme-toggle button.active { background: var(--accent); color: var(--accent-contrast); }
 
-  .board-grid {
-    flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px; padding: 8px; overflow: hidden;
+  .board-stack {
+    flex: 1; overflow-y: auto; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 10px;
   }
   .column {
-    background: var(--col-bg); border-radius: 10px; padding: 6px;
-    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    background: var(--col-bg); border-radius: 12px; overflow: hidden;
   }
   .column-header {
-    padding: 2px 4px 6px; display: flex; align-items: baseline; justify-content: space-between; gap: 4px;
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer;
   }
-  .column-header .name { font-weight: 700; font-size: 12px; line-height: 1.2; flex: 1; min-width: 0; }
-  .column-header .count { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-  .column-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
-  .empty-col { color: var(--text-muted); font-size: 11px; text-align: center; padding: 10px 4px; }
+  .column-header .name { font-weight: 700; font-size: 15px; color: var(--text); }
+  .column-header .count { font-size: 12px; color: var(--text-muted); margin-left: 6px; font-weight: 500; }
+  .column-header .chevron { transition: transform 0.15s ease; color: var(--text-muted); flex-shrink: 0; }
+  .column-header .chevron svg { width: 18px; height: 18px; display: block; }
+  .column.collapsed .chevron { transform: rotate(-90deg); }
+  .column-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .empty-col { color: var(--text-muted); font-size: 13px; text-align: center; padding: 14px 4px; }
 
   .chip {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 7px; font-size: 12px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 14px; cursor: pointer; color: var(--text);
+    display: flex; align-items: flex-start; gap: 10px;
   }
-  .chip-title {
-    font-weight: 600; line-height: 1.3;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  .chip.done { opacity: 0.6; }
+  .chip-tick {
+    width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border);
+    background: var(--surface); flex-shrink: 0; margin-top: 1px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
   }
-  .chip-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; min-height: 16px; }
+  .chip-tick svg { width: 12px; height: 12px; display: none; color: var(--accent-contrast); }
+  .chip.done .chip-tick { background: var(--accent); border-color: var(--accent); }
+  .chip.done .chip-tick svg { display: block; }
+  .chip-content { flex: 1; min-width: 0; }
+  .chip-title { font-weight: 600; line-height: 1.3; color: var(--text); }
+  .chip.done .chip-title { text-decoration: line-through; }
+  .chip-notes {
+    font-size: 12px; color: var(--text-muted); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chip-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
   .chip-assignee {
-    width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: #fff;
-    font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #fff;
+    font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
-  .chip-due { font-size: 9px; color: var(--text-muted); margin-left: auto; }
+  .chip-due { font-size: 11px; color: var(--text-muted); }
+
+  .done-section-label {
+    font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.4px; padding: 10px 2px 2px;
+  }
 
   .add-task-btn {
     background: none; border: 1.5px dashed var(--border); color: var(--text-muted);
-    padding: 6px; border-radius: 8px; font-size: 11px; font-weight: 600; text-align: center;
+    padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 600; text-align: center;
   }
 
   /* --- Bottom-sheet overlay (chip expand / add task) --- */
@@ -233,6 +254,7 @@ let state = {
   setupMode: "create",  // "create" | "join"
   setupError: "",
   settingsOpen: false,
+  collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
   theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
   connected: false      // live Firebase RTDB connection status
 };
@@ -405,10 +427,34 @@ window.handleJoinHousehold = async (formEl) => {
   attachHouseholdListeners(householdId);
 };
 
-window.copyCode = async (code) => {
+window.copyCode = async (code, btnEl) => {
+  let copied = false;
   try {
-    await navigator.clipboard.writeText(code);
-  } catch (e) { /* clipboard unavailable, ignore */ }
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(code);
+      copied = true;
+    }
+  } catch (e) { /* fall through to legacy fallback below */ }
+
+  if (!copied) {
+    // Fallback for browsers/webviews without a working Clipboard API.
+    try {
+      const tmp = document.createElement("textarea");
+      tmp.value = code;
+      tmp.style.position = "fixed";
+      tmp.style.opacity = "0";
+      document.body.appendChild(tmp);
+      tmp.select();
+      copied = document.execCommand("copy");
+      document.body.removeChild(tmp);
+    } catch (e) { /* give up silently, still show feedback below is skipped */ }
+  }
+
+  if (btnEl) {
+    const original = btnEl.textContent;
+    btnEl.textContent = copied ? "Copied!" : "Copy failed";
+    setTimeout(() => { btnEl.textContent = original; }, 1500);
+  }
 };
 
 window.openSettings = () => {
@@ -487,6 +533,26 @@ window.handleDeleteTask = async (taskId) => {
   state.expanded = null;
   state.confirmingDelete = null;
   render();
+};
+
+window.toggleColumnCollapsed = (columnId) => {
+  state.collapsedColumns[columnId] = !state.collapsedColumns[columnId];
+  render();
+};
+
+window.handleToggleDone = async (taskId, currentlyDone, event) => {
+  if (event) event.stopPropagation();
+  const newDone = !currentlyDone;
+  const newDoneAt = newDone ? Date.now() : null;
+  // Optimistic local update so the tick feels instant; the onValue listener reconciles once Firebase confirms.
+  if (state.tasks[taskId]) {
+    state.tasks[taskId] = { ...state.tasks[taskId], done: newDone, doneAt: newDoneAt };
+    render();
+  }
+  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), {
+    done: newDone,
+    doneAt: newDoneAt
+  });
 };
 
 // ---------- render ----------
@@ -570,7 +636,7 @@ function renderBoard() {
         </svg>
       </button>
     </div>
-    <div class="board-grid">
+    <div class="board-stack">
       ${columns.map(col => renderColumn(col, tasksByColumn[col.id] || [], members)).join("")}
     </div>
     ${renderSheet(members)}
@@ -584,7 +650,7 @@ function renderSettingsSheet(h) {
         <h2>Settings</h2>
         <div class="settings-row">
           <span>Invite code</span>
-          <button class="code-btn" onclick="copyCode('${h.meta.code}')">${h.meta.code}</button>
+          <button class="code-btn" onclick="copyCode('${h.meta.code}', this)">${h.meta.code}</button>
         </div>
         <div class="settings-row">
           <span>Sync status</span>
@@ -607,31 +673,53 @@ function renderSettingsSheet(h) {
 }
 
 function renderColumn(col, tasks, members) {
+  const isCollapsed = !!state.collapsedColumns[col.id];
+  const active = tasks.filter(t => !t.done).sort((a, b) => a.order - b.order);
+  const done = tasks.filter(t => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+
   return `
-    <div class="column">
-      <div class="column-header">
-        <div class="name">${escapeHtml(col.name)}</div>
-        <div class="count">${tasks.length}</div>
+    <div class="column ${isCollapsed ? "collapsed" : ""}">
+      <div class="column-header" onclick="toggleColumnCollapsed('${col.id}')">
+        <div style="display:flex; align-items:baseline;">
+          <div class="name">${escapeHtml(col.name)}</div>
+          <div class="count">${active.length}</div>
+        </div>
+        <div class="chevron">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
       </div>
-      <div class="column-body">
-        ${tasks.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
-        ${tasks.map(t => renderChip(t, members)).join("")}
-        <button class="add-task-btn" onclick="toggleExpand('new-${col.id}')">+ Add</button>
-      </div>
+      ${isCollapsed ? "" : `
+        <div class="column-body">
+          ${active.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
+          ${active.map(t => renderChip(t, members)).join("")}
+          <button class="add-task-btn" onclick="toggleExpand('new-${col.id}')">+ Add task</button>
+          ${done.length > 0 ? `
+            <div class="done-section-label">Done (${done.length})</div>
+            ${done.map(t => renderChip(t, members)).join("")}
+          ` : ""}
+        </div>
+      `}
     </div>`;
 }
 
 function renderChip(task, members) {
   const assigneeMember = members[task.assignee];
+  const isDone = !!task.done;
   return `
-    <div class="chip" onclick="toggleExpand('${task.id}')">
-      <div class="chip-title">${escapeHtml(task.title)}</div>
-      ${(assigneeMember || task.dueDate) ? `
-        <div class="chip-meta">
-          ${assigneeMember ? `<div class="chip-assignee">${initials(assigneeMember.displayName)}</div>` : `<span></span>`}
-          ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
-        </div>
-      ` : ""}
+    <div class="chip ${isDone ? "done" : ""}" onclick="toggleExpand('${task.id}')">
+      <div class="chip-tick" onclick="handleToggleDone('${task.id}', ${isDone}, event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+      <div class="chip-content">
+        <div class="chip-title">${escapeHtml(task.title)}</div>
+        ${task.notes ? `<div class="chip-notes">${escapeHtml(task.notes)}</div>` : ""}
+        ${(assigneeMember || task.dueDate) ? `
+          <div class="chip-meta">
+            ${assigneeMember ? `<div class="chip-assignee">${initials(assigneeMember.displayName)}</div>` : ""}
+            ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
+          </div>
+        ` : ""}
+      </div>
     </div>`;
 }
 
