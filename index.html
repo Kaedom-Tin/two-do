@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#3D5A80">
-<title>Two Do — v0.3.0</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Two Do — v0.3.1</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -171,11 +174,6 @@
     font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .chip-due { font-size: 11px; color: var(--text-muted); }
-
-  .done-section-label {
-    font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
-    letter-spacing: 0.4px; padding: 10px 2px 2px;
-  }
 
   .add-task-btn {
     background: none; border: 1.5px dashed var(--border); color: var(--text-muted);
@@ -540,19 +538,28 @@ window.toggleColumnCollapsed = (columnId) => {
   render();
 };
 
-window.handleToggleDone = async (taskId, currentlyDone, event) => {
+window.handleToggleDone = async (taskId, event) => {
   if (event) event.stopPropagation();
-  const newDone = !currentlyDone;
-  const newDoneAt = newDone ? Date.now() : null;
-  // Optimistic local update so the tick feels instant; the onValue listener reconciles once Firebase confirms.
-  if (state.tasks[taskId]) {
-    state.tasks[taskId] = { ...state.tasks[taskId], done: newDone, doneAt: newDoneAt };
-    render();
+  const task = state.tasks[taskId];
+  if (!task) return;
+
+  const columns = Object.entries(state.household.columns || {}).map(([id, c]) => ({ id, ...c })).sort((a, b) => a.order - b.order);
+  const doneColumnId = getDoneColumnId(columns);
+  const firstColumnId = columns.length ? columns[0].id : null;
+
+  let updates;
+  if (task.columnId === doneColumnId) {
+    // Currently done — send it back to wherever it was before, or the first column if unknown.
+    updates = { columnId: task.previousColumnId || firstColumnId, doneAt: null };
+  } else {
+    // Mark done — move into the Done column, remembering where it came from.
+    updates = { columnId: doneColumnId, previousColumnId: task.columnId, doneAt: Date.now() };
   }
-  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), {
-    done: newDone,
-    doneAt: newDoneAt
-  });
+
+  // Optimistic local update so the tick feels instant; the onValue listener reconciles once Firebase confirms.
+  state.tasks[taskId] = { ...task, ...updates };
+  render();
+  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), updates);
 };
 
 // ---------- render ----------
@@ -613,11 +620,19 @@ function renderSetup() {
     </div>`;
 }
 
+function getDoneColumnId(columns) {
+  const named = columns.find(c => (c.name || "").trim().toLowerCase() === "done");
+  if (named) return named.id;
+  // Fallback: the last column by order, in case it's been renamed.
+  return columns.length ? columns[columns.length - 1].id : null;
+}
+
 function renderBoard() {
   const h = state.household;
   const columns = Object.entries(h.columns || {})
     .map(([id, c]) => ({ id, ...c }))
     .sort((a, b) => a.order - b.order);
+  const doneColumnId = getDoneColumnId(columns);
   const members = h.members || {};
   const tasksByColumn = {};
   Object.entries(state.tasks).forEach(([id, t]) => {
@@ -637,7 +652,7 @@ function renderBoard() {
       </button>
     </div>
     <div class="board-stack">
-      ${columns.map(col => renderColumn(col, tasksByColumn[col.id] || [], members)).join("")}
+      ${columns.map(col => renderColumn(col, tasksByColumn[col.id] || [], members, doneColumnId)).join("")}
     </div>
     ${renderSheet(members)}
     ${state.settingsOpen ? renderSettingsSheet(h) : ""}`;
@@ -672,17 +687,19 @@ function renderSettingsSheet(h) {
     </div>`;
 }
 
-function renderColumn(col, tasks, members) {
+function renderColumn(col, tasks, members, doneColumnId) {
   const isCollapsed = !!state.collapsedColumns[col.id];
-  const active = tasks.filter(t => !t.done).sort((a, b) => a.order - b.order);
-  const done = tasks.filter(t => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  const isDoneColumn = col.id === doneColumnId;
+  const sorted = isDoneColumn
+    ? [...tasks].sort((a, b) => (b.doneAt || b.order || 0) - (a.doneAt || a.order || 0))
+    : [...tasks].sort((a, b) => a.order - b.order);
 
   return `
     <div class="column ${isCollapsed ? "collapsed" : ""}">
       <div class="column-header" onclick="toggleColumnCollapsed('${col.id}')">
         <div style="display:flex; align-items:baseline;">
           <div class="name">${escapeHtml(col.name)}</div>
-          <div class="count">${active.length}</div>
+          <div class="count">${sorted.length}</div>
         </div>
         <div class="chevron">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -690,24 +707,20 @@ function renderColumn(col, tasks, members) {
       </div>
       ${isCollapsed ? "" : `
         <div class="column-body">
-          ${active.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
-          ${active.map(t => renderChip(t, members)).join("")}
+          ${sorted.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
+          ${sorted.map(t => renderChip(t, members, doneColumnId)).join("")}
           <button class="add-task-btn" onclick="toggleExpand('new-${col.id}')">+ Add task</button>
-          ${done.length > 0 ? `
-            <div class="done-section-label">Done (${done.length})</div>
-            ${done.map(t => renderChip(t, members)).join("")}
-          ` : ""}
         </div>
       `}
     </div>`;
 }
 
-function renderChip(task, members) {
+function renderChip(task, members, doneColumnId) {
   const assigneeMember = members[task.assignee];
-  const isDone = !!task.done;
+  const isDone = task.columnId === doneColumnId;
   return `
     <div class="chip ${isDone ? "done" : ""}" onclick="toggleExpand('${task.id}')">
-      <div class="chip-tick" onclick="handleToggleDone('${task.id}', ${isDone}, event)">
+      <div class="chip-tick" onclick="handleToggleDone('${task.id}', event)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
       </div>
       <div class="chip-content">
