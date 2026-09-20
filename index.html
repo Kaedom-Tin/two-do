@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Two Do — v0.3.1</title>
+<title>Two Do — v0.3.2</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -88,7 +88,7 @@
   .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
   .field input, .field textarea, .field select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--bg);
+    background: var(--bg); color: var(--text);
   }
   .error-msg { color: var(--danger); font-size: 13px; margin-top: 8px; }
   .setup-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -239,11 +239,12 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
+const APP_VERSION = "0.3.2";
 
 const appEl = document.getElementById("app");
 
 let state = {
-  user: null,
+  user: undefined,     // undefined = auth state not yet resolved; null = confirmed signed out
   householdId: null,
   household: null,     // { meta, members, columns }
   tasks: {},           // taskId -> task
@@ -254,7 +255,8 @@ let state = {
   settingsOpen: false,
   collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
   theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
-  connected: false      // live Firebase RTDB connection status
+  connected: false,     // live Firebase RTDB connection status
+  householdsChecked: false // becomes true once we've checked whether the signed-in user belongs to a household
 };
 
 function applyTheme() {
@@ -309,6 +311,7 @@ onAuthStateChanged(auth, (user) => {
   state.householdId = null;
   state.household = null;
   state.tasks = {};
+  state.householdsChecked = false;
   if (user) {
     loadUserHouseholds(user.uid);
   } else {
@@ -318,13 +321,13 @@ onAuthStateChanged(auth, (user) => {
 
 async function loadUserHouseholds(uid) {
   const snap = await get(ref(db, `users/${uid}/householdIds`));
+  state.householdsChecked = true;
   if (snap.exists()) {
     const ids = Object.keys(snap.val());
     state.householdId = ids[0]; // v0.1.0: single household per user
     attachHouseholdListeners(state.householdId);
-  } else {
-    render();
   }
+  render();
 }
 
 function attachHouseholdListeners(householdId) {
@@ -565,8 +568,10 @@ window.handleToggleDone = async (taskId, event) => {
 // ---------- render ----------
 
 function render() {
-  if (state.user === undefined) return;
+  if (state.user === undefined) return; // auth state not resolved yet — keep showing the initial spinner
   if (!state.user) return renderSignIn();
+  if (!state.householdsChecked) return; // still checking whether they belong to a household — keep spinner
+  if (state.householdId && !state.household) return; // household exists but its data hasn't arrived yet — keep spinner
   if (!state.householdId || !state.household) return renderSetup();
   return renderBoard();
 }
@@ -643,7 +648,7 @@ function renderBoard() {
 
   appEl.innerHTML = `
     <div class="board-header">
-      <div class="title">${escapeHtml(h.meta.name)}</div>
+      <div class="title">${escapeHtml(h.meta.name)} <span style="font-weight:400; color:var(--text-muted); font-size:13px;">v${APP_VERSION}</span></div>
       <button class="icon-btn" onclick="openSettings()" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
