@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#3D5A80">
-<title>Two Do — v0.1.0</title>
+<title>Two Do — v0.2.0</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -16,6 +16,30 @@
     --accent-contrast: #FFFFFF;
     --danger: #B3261E;
     --col-bg: #EFEFEC;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181A;
+      --surface: #202225;
+      --border: #34363A;
+      --text: #F2F2F0;
+      --text-muted: #9A9C9E;
+      --accent: #6C93BF;
+      --accent-contrast: #0E1116;
+      --danger: #E5615A;
+      --col-bg: #26282B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181A;
+    --surface: #202225;
+    --border: #34363A;
+    --text: #F2F2F0;
+    --text-muted: #9A9C9E;
+    --accent: #6C93BF;
+    --accent-contrast: #0E1116;
+    --danger: #E5615A;
+    --col-bg: #26282B;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -76,11 +100,30 @@
     padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
   }
   .board-header .title { font-size: 17px; font-weight: 700; }
-  .board-header .code-pill {
-    font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;
+  .icon-btn {
+    background: none; color: var(--text); padding: 6px; display: flex; align-items: center; justify-content: center;
   }
-  .code-pill button { background: var(--col-bg); color: var(--text); padding: 3px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
-  .icon-btn { background: none; color: var(--text-muted); font-size: 13px; padding: 6px; }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  /* --- Settings sheet --- */
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .settings-row:last-of-type { border-bottom: none; }
+  .settings-row .code-btn {
+    background: var(--col-bg); color: var(--text); padding: 4px 10px; font-size: 12px;
+    font-weight: 700; letter-spacing: 0.5px; border-radius: 6px;
+  }
+  .sync-badge { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+  .sync-dot.online { background: #3A9A5C; }
+  .sync-dot.offline { background: var(--danger); }
+  .theme-toggle { display: flex; gap: 6px; margin-top: 8px; margin-bottom: 4px; }
+  .theme-toggle button {
+    flex: 1; padding: 8px; background: var(--col-bg); font-size: 13px; font-weight: 600; color: var(--text-muted); border-radius: 8px;
+  }
+  .theme-toggle button.active { background: var(--accent); color: var(--accent-contrast); }
 
   .board-grid {
     flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -188,8 +231,25 @@ let state = {
   expanded: null,       // taskId or "new-<columnId>" currently expanded
   confirmingDelete: null, // taskId currently showing the delete confirm step, or null
   setupMode: "create",  // "create" | "join"
-  setupError: ""
+  setupError: "",
+  settingsOpen: false,
+  theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
+  connected: false      // live Firebase RTDB connection status
 };
+
+function applyTheme() {
+  if (state.theme === "system") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    document.documentElement.setAttribute("data-theme", state.theme);
+  }
+}
+applyTheme();
+
+onValue(ref(db, ".info/connected"), (snap) => {
+  state.connected = snap.val() === true;
+  render();
+});
 
 let householdListenerUnsub = null;
 let tasksListenerUnsub = null;
@@ -351,6 +411,23 @@ window.copyCode = async (code) => {
   } catch (e) { /* clipboard unavailable, ignore */ }
 };
 
+window.openSettings = () => {
+  state.settingsOpen = true;
+  render();
+};
+
+window.closeSettings = () => {
+  state.settingsOpen = false;
+  render();
+};
+
+window.setTheme = (theme) => {
+  state.theme = theme;
+  localStorage.setItem("twoDoTheme", theme);
+  applyTheme();
+  render();
+};
+
 // ---------- tasks ----------
 
 window.toggleExpand = (key) => {
@@ -361,6 +438,16 @@ window.toggleExpand = (key) => {
 
 window.closeSheet = () => {
   state.expanded = null;
+  state.confirmingDelete = null;
+  render();
+};
+
+window.requestDeleteConfirm = (taskId) => {
+  state.confirmingDelete = taskId;
+  render();
+};
+
+window.cancelDeleteConfirm = () => {
   state.confirmingDelete = null;
   render();
 };
@@ -475,18 +562,48 @@ function renderBoard() {
 
   appEl.innerHTML = `
     <div class="board-header">
-      <div>
-        <div class="title">${escapeHtml(h.meta.name)}</div>
-        <div class="code-pill">
-          Invite code: <button onclick="copyCode('${h.meta.code}')">${h.meta.code}</button>
-        </div>
-      </div>
-      <button class="icon-btn" onclick="handleSignOut()">Sign out</button>
+      <div class="title">${escapeHtml(h.meta.name)}</div>
+      <button class="icon-btn" onclick="openSettings()" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
     </div>
     <div class="board-grid">
       ${columns.map(col => renderColumn(col, tasksByColumn[col.id] || [], members)).join("")}
     </div>
-    ${renderSheet(members)}`;
+    ${renderSheet(members)}
+    ${state.settingsOpen ? renderSettingsSheet(h) : ""}`;
+}
+
+function renderSettingsSheet(h) {
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeSettings();">
+      <div class="sheet-card">
+        <h2>Settings</h2>
+        <div class="settings-row">
+          <span>Invite code</span>
+          <button class="code-btn" onclick="copyCode('${h.meta.code}')">${h.meta.code}</button>
+        </div>
+        <div class="settings-row">
+          <span>Sync status</span>
+          <span class="sync-badge">
+            <span class="sync-dot ${state.connected ? "online" : "offline"}"></span>
+            ${state.connected ? "Synced" : "Offline"}
+          </span>
+        </div>
+        <div class="settings-row" style="display:block;">
+          <span>Theme</span>
+          <div class="theme-toggle">
+            <button class="${state.theme === "system" ? "active" : ""}" onclick="setTheme('system')">System</button>
+            <button class="${state.theme === "light" ? "active" : ""}" onclick="setTheme('light')">Light</button>
+            <button class="${state.theme === "dark" ? "active" : ""}" onclick="setTheme('dark')">Dark</button>
+          </div>
+        </div>
+        <button class="btn-secondary" style="width:100%; margin-top:18px; justify-content:center;" onclick="handleSignOut()">Sign out</button>
+      </div>
+    </div>`;
 }
 
 function renderColumn(col, tasks, members) {
@@ -591,11 +708,11 @@ function renderSheet(members) {
         ${state.confirmingDelete === state.expanded ? `
           <div class="delete-confirm">
             <span>Delete this task?</span>
-            <button class="btn-secondary" onclick="state.confirmingDelete=null; render();">Cancel</button>
+            <button class="btn-secondary" onclick="cancelDeleteConfirm()">Cancel</button>
             <button class="btn-danger" onclick="handleDeleteTask('${state.expanded}')">Delete</button>
           </div>
         ` : `
-          <button class="delete-link" onclick="state.confirmingDelete='${state.expanded}'; render();">Delete task</button>
+          <button class="delete-link" onclick="requestDeleteConfirm('${state.expanded}')">Delete task</button>
         `}
       </div>
     </div>`;
