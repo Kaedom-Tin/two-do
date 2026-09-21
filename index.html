@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Two Do — v0.5.1</title>
+<title>Two Do — v0.5.2</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -183,6 +183,7 @@
     padding: 10px 12px; font-size: 14px; cursor: pointer; color: var(--text);
     display: flex; align-items: flex-start; gap: 10px;
     -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+    touch-action: none;
   }
   .chip.done { opacity: 0.6; }
   .chip-tick {
@@ -271,7 +272,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "0.5.1";
+const APP_VERSION = "0.5.2";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
