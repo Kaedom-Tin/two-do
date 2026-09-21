@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Two Do — v0.5.2</title>
+<title>Two Do — v0.5.3</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -181,11 +181,16 @@
   .chip {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; font-size: 14px; cursor: pointer; color: var(--text);
-    display: flex; align-items: flex-start; gap: 10px;
+    display: flex; align-items: flex-start; gap: 8px;
     -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
-    touch-action: none;
   }
   .chip.done { opacity: 0.6; }
+  .chip-handle {
+    flex-shrink: 0; align-self: center; width: 22px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); touch-action: none; cursor: grab;
+  }
+  .chip-handle svg { width: 16px; height: 16px; }
   .chip-tick {
     width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border);
     background: var(--surface); flex-shrink: 0; margin-top: 1px; cursor: pointer;
@@ -272,7 +277,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "0.5.2";
+const APP_VERSION = "0.5.3";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
@@ -578,9 +583,9 @@ window.handleChipClick = (taskId) => {
 };
 
 window.handleChipPointerDown = (e, taskId) => {
-  if (e.target.closest(".chip-tick")) return; // let the tickbox handle its own tap
   if (dragCtx) return; // a drag/candidate is already in progress
-  const chipEl = e.currentTarget;
+  const chipEl = e.currentTarget.closest(".chip");
+  if (!chipEl) return;
 
   const candidate = {
     taskId, chipEl, pointerId: e.pointerId,
@@ -1054,7 +1059,7 @@ function renderChip(task, members, doneColumnId) {
   const isDone = task.columnId === doneColumnId;
   return `
     <div class="chip ${isDone ? "done" : ""}" data-task-id="${task.id}" data-column-id="${task.columnId}"
-         onpointerdown="handleChipPointerDown(event, '${task.id}')" onclick="handleChipClick('${task.id}')">
+         onclick="handleChipClick('${task.id}')">
       <div class="chip-tick" onclick="handleToggleDone('${task.id}', event)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
       </div>
@@ -1067,6 +1072,9 @@ function renderChip(task, members, doneColumnId) {
             ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
           </div>
         ` : ""}
+      </div>
+      <div class="chip-handle" onpointerdown="handleChipPointerDown(event, '${task.id}')" onclick="event.stopPropagation()" aria-label="Drag to reorder">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"></circle><circle cx="15" cy="6" r="1.5"></circle><circle cx="9" cy="12" r="1.5"></circle><circle cx="15" cy="12" r="1.5"></circle><circle cx="9" cy="18" r="1.5"></circle><circle cx="15" cy="18" r="1.5"></circle></svg>
       </div>
     </div>`;
 }
