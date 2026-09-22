@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.0.1</title>
+<title>Two Do — v1.1.0</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -24,6 +24,7 @@
     --accent: #3D5A80;
     --accent-contrast: #FFFFFF;
     --danger: #B3261E;
+    --danger-solid: #B3261E;
     --col-bg: #EFEFEC;
   }
   @media (prefers-color-scheme: dark) {
@@ -36,6 +37,7 @@
       --accent: #6C93BF;
       --accent-contrast: #0E1116;
       --danger: #E5615A;
+      --danger-solid: #C1443D;
       --col-bg: #26282B;
     }
   }
@@ -48,9 +50,14 @@
     --accent: #6C93BF;
     --accent-contrast: #0E1116;
     --danger: #E5615A;
+    --danger-solid: #C1443D;
     --col-bg: #26282B;
   }
   * { box-sizing: border-box; }
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible,
+  select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
   html, body {
     margin: 0; padding: 0; height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -179,7 +186,8 @@
     padding: 10px 12px; font-size: 14px; cursor: grab; color: var(--text);
     display: flex; align-items: flex-start; gap: 10px;
   }
-  .chip.done { opacity: 0.6; }
+  .chip.done { background: var(--col-bg); }
+  .chip.done .chip-title { text-decoration: line-through; color: var(--text-muted); }
   .chip.dragging { opacity: 0.35; }
   .chip.drag-over { border: 2px dashed var(--accent); background: var(--col-bg); }
   .column-body.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 8px; }
@@ -193,7 +201,6 @@
   .chip.done .chip-tick svg { display: block; }
   .chip-content { flex: 1; min-width: 0; }
   .chip-title { font-weight: 600; line-height: 1.3; color: var(--text); }
-  .chip.done .chip-title { text-decoration: line-through; }
   .chip-notes {
     font-size: 12px; color: var(--text-muted); margin-top: 2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -229,7 +236,7 @@
   }
   .delete-confirm span { flex: 1; font-size: 13px; font-weight: 600; }
   .delete-confirm .btn-secondary, .delete-confirm .btn-danger { padding: 8px 12px; font-size: 13px; }
-  .btn-danger { background: var(--danger); color: #fff; font-weight: 600; }
+  .btn-danger { background: var(--danger-solid); color: #fff; font-weight: 600; }
 
   .spinner {
     width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
@@ -269,7 +276,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.1.0";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
