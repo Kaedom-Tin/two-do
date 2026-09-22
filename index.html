@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.0.0</title>
+<title>Two Do — v1.0.1</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -249,7 +249,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
-  getDatabase, ref, get, set, update, push, remove, onValue
+  getDatabase, ref, get, set, update, push, remove, onValue, increment
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -269,7 +269,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
@@ -481,6 +481,10 @@ function reconcileColumnCounts() {
       updates[`households/${state.householdId}/columns/${colId}/taskCount`] = actual;
     }
   });
+  const actualColumnCount = Object.keys(state.household.columns).length;
+  if ((state.household.columnCount || 0) !== actualColumnCount) {
+    updates[`households/${state.householdId}/columnCount`] = actualColumnCount;
+  }
   if (Object.keys(updates).length > 0) {
     update(ref(db), updates).catch(() => { /* another online member will reconcile it instead */ });
   }
@@ -644,10 +648,14 @@ window.handleAddColumn = async (formEl) => {
   const newId = push(ref(db, `households/${state.householdId}/columns`)).key;
   const newColumn = { name, order: maxOrder + 1 };
   state.household.columns[newId] = newColumn; // optimistic
+  state.household.columnCount = (state.household.columnCount || 0) + 1;
   persistCache();
   render();
   formEl.reset();
-  queueOrSend("set", `households/${state.householdId}/columns/${newId}`, newColumn);
+  const updates = {};
+  updates[`households/${state.householdId}/columns/${newId}`] = newColumn;
+  updates[`households/${state.householdId}/columnCount`] = increment(1);
+  queueOrSend("update", "", updates);
 };
 
 window.handleRenameColumn = async (columnId, newName) => {
@@ -684,9 +692,13 @@ window.handleDeleteColumn = async (columnId) => {
   const hasTasks = Object.values(state.tasks).some(t => t.columnId === columnId);
   if (hasTasks) return; // guarded in the UI too, but double-check before writing
   delete state.household.columns[columnId]; // optimistic
+  state.household.columnCount = Math.max(0, (state.household.columnCount || 1) - 1);
   persistCache();
   render();
-  queueOrSend("remove", `households/${state.householdId}/columns/${columnId}`, null);
+  const updates = {};
+  updates[`households/${state.householdId}/columns/${columnId}`] = null; // null deletes via update()
+  updates[`households/${state.householdId}/columnCount`] = increment(-1);
+  queueOrSend("update", "", updates);
 };
 
 // ---------- drag to reorder / move chips ----------
