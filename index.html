@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v0.7.0</title>
+<title>Two Do — v1.0.0</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -269,7 +269,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "0.7.0";
+const APP_VERSION = "1.0.0";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
@@ -456,12 +456,34 @@ function attachHouseholdListeners(householdId) {
     state.household = snap.val();
     persistCache();
     render();
+    reconcileColumnCounts();
   });
   tasksListenerUnsub = onValue(ref(db, `households/${householdId}/tasks`), (snap) => {
     state.tasks = snap.val() || {};
     persistCache();
     render();
+    reconcileColumnCounts();
   });
+}
+
+// Keeps each column's `taskCount` field (used by the security rules to block deleting
+// a column that still holds tasks) in sync with reality. Recomputed from the live task
+// list rather than incremented per-operation, so it can't drift out of sync even if some
+// code path forgets to touch it, and it self-heals older columns that never had the field.
+function reconcileColumnCounts() {
+  if (!state.connected || !state.household || !state.household.columns) return;
+  const counts = {};
+  Object.values(state.tasks).forEach(t => { counts[t.columnId] = (counts[t.columnId] || 0) + 1; });
+  const updates = {};
+  Object.entries(state.household.columns).forEach(([colId, col]) => {
+    const actual = counts[colId] || 0;
+    if ((col.taskCount || 0) !== actual) {
+      updates[`households/${state.householdId}/columns/${colId}/taskCount`] = actual;
+    }
+  });
+  if (Object.keys(updates).length > 0) {
+    update(ref(db), updates).catch(() => { /* another online member will reconcile it instead */ });
+  }
 }
 
 function detachListeners() {
