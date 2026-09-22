@@ -13,45 +13,45 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.1.0</title>
+<title>Two Do — v1.1.1</title>
 <style>
   :root {
-    --bg: #F7F7F5;
+    --bg: #F4F6FA;
     --surface: #FFFFFF;
-    --border: #E2E2DF;
-    --text: #1E1E1C;
-    --text-muted: #6B6B66;
+    --border: #D5DEE8;
+    --text: #16202E;
+    --text-muted: #4C5C70;
     --accent: #3D5A80;
     --accent-contrast: #FFFFFF;
     --danger: #B3261E;
     --danger-solid: #B3261E;
-    --col-bg: #EFEFEC;
+    --col-bg: #E7ECF3;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #17181A;
-      --surface: #202225;
-      --border: #34363A;
-      --text: #F2F2F0;
-      --text-muted: #9A9C9E;
+      --bg: #10151D;
+      --surface: #222B38;
+      --border: #33404F;
+      --text: #EAF0F7;
+      --text-muted: #93A2B4;
       --accent: #6C93BF;
-      --accent-contrast: #0E1116;
-      --danger: #E5615A;
+      --accent-contrast: #0C121B;
+      --danger: #E86D64;
       --danger-solid: #C1443D;
-      --col-bg: #26282B;
+      --col-bg: #1A222D;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #17181A;
-    --surface: #202225;
-    --border: #34363A;
-    --text: #F2F2F0;
-    --text-muted: #9A9C9E;
+    --bg: #10151D;
+    --surface: #222B38;
+    --border: #33404F;
+    --text: #EAF0F7;
+    --text-muted: #93A2B4;
     --accent: #6C93BF;
-    --accent-contrast: #0E1116;
-    --danger: #E5615A;
+    --accent-contrast: #0C121B;
+    --danger: #E86D64;
     --danger-solid: #C1443D;
-    --col-bg: #26282B;
+    --col-bg: #1A222D;
   }
   * { box-sizing: border-box; }
   a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible,
@@ -276,7 +276,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
