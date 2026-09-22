@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Two Do — v0.5.3</title>
+<title>Two Do — v0.5.4</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -150,14 +150,6 @@
   .col-delete-btn svg { width: 16px; height: 16px; }
   .col-delete-hint { font-size: 11px; color: var(--text-muted); flex-shrink: 0; max-width: 90px; line-height: 1.3; }
 
-  /* --- Drag to reorder / move chips --- */
-  .chip[data-dragging="true"] { opacity: 0.35; }
-  .chip-ghost {
-    position: fixed; z-index: 200; pointer-events: none; margin: 0;
-    box-shadow: 0 10px 28px rgba(0,0,0,0.28); transform: scale(1.03);
-  }
-  .drop-line { height: 3px; background: var(--accent); border-radius: 2px; margin: 2px 0; }
-
   .board-stack {
     flex: 1; overflow-y: auto; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 10px;
@@ -180,17 +172,13 @@
 
   .chip {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 12px; font-size: 14px; cursor: pointer; color: var(--text);
-    display: flex; align-items: flex-start; gap: 8px;
-    -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+    padding: 10px 12px; font-size: 14px; cursor: grab; color: var(--text);
+    display: flex; align-items: flex-start; gap: 10px;
   }
   .chip.done { opacity: 0.6; }
-  .chip-handle {
-    flex-shrink: 0; align-self: center; width: 22px; height: 34px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text-muted); touch-action: none; cursor: grab;
-  }
-  .chip-handle svg { width: 16px; height: 16px; }
+  .chip.dragging { opacity: 0.35; }
+  .chip.drag-over { border: 2px dashed var(--accent); background: var(--col-bg); }
+  .column-body.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 8px; }
   .chip-tick {
     width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border);
     background: var(--surface); flex-shrink: 0; margin-top: 1px; cursor: pointer;
@@ -277,7 +265,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "0.5.3";
+const APP_VERSION = "0.5.4";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
@@ -569,180 +557,85 @@ window.handleDeleteColumn = async (columnId) => {
 };
 
 // ---------- drag to reorder / move chips ----------
-// Implemented with Pointer Events (not native HTML5 drag, which doesn't behave well on touch).
-// dragCtx is deliberately kept OUTSIDE `state`: it's transient gesture/DOM state, not
-// something a Firebase listener should ever reconcile or a re-render should rebuild.
-let dragCtx = null;
-let dragSuppressClick = false;
-const LONG_PRESS_MS = 400;
-const MOVE_CANCEL_PX = 10;
+// Same technique as Basket: native HTML5 Drag and Drop (draggable="true" + the five
+// standard drag events), not hand-rolled Pointer Events. The browser itself decides
+// whether a touch is a scroll or a drag, so normal scrolling-from-a-chip keeps working
+// for free. Known limitation (same as Basket): iPhone Safari does not support triggering
+// this via touch — fine for now since the household is all on Android.
+let dragTaskId = null;
+let dragSourceColumnId = null;
 
-window.handleChipClick = (taskId) => {
-  if (dragSuppressClick) { dragSuppressClick = false; return; }
-  toggleExpand(taskId);
+window.chipDragStart = (e, taskId, columnId) => {
+  dragTaskId = taskId;
+  dragSourceColumnId = columnId;
+  e.dataTransfer.effectAllowed = "move";
+  // Delay adding the dimmed style so the browser captures a normal-looking drag
+  // image before the source chip visually dims (same trick Basket uses).
+  const chipId = "chip-" + taskId;
+  setTimeout(() => { const el = document.getElementById(chipId); if (el) el.classList.add("dragging"); }, 0);
 };
 
-window.handleChipPointerDown = (e, taskId) => {
-  if (dragCtx) return; // a drag/candidate is already in progress
-  const chipEl = e.currentTarget.closest(".chip");
-  if (!chipEl) return;
-
-  const candidate = {
-    taskId, chipEl, pointerId: e.pointerId,
-    startX: e.clientX, startY: e.clientY,
-    timer: null
-  };
-  dragCtx = candidate;
-
-  candidate.timer = setTimeout(() => {
-    if (dragCtx === candidate) beginDrag(candidate, e.clientX, e.clientY);
-  }, LONG_PRESS_MS);
-
-  const onMove = (ev) => {
-    if (!dragCtx || dragCtx.pointerId !== ev.pointerId) return;
-    if (dragCtx.active) { handleDragPointerMove(ev); return; }
-    const dx = ev.clientX - candidate.startX, dy = ev.clientY - candidate.startY;
-    if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) cancelCandidate();
-  };
-  const onUp = (ev) => {
-    if (!dragCtx || dragCtx.pointerId !== ev.pointerId) return;
-    if (dragCtx.active) { finishDrag(ev); }
-    else cancelCandidate();
-  };
-  candidate.onMove = onMove;
-  candidate.onUp = onUp;
-  document.addEventListener("pointermove", onMove, { passive: false });
-  document.addEventListener("pointerup", onUp);
-  document.addEventListener("pointercancel", onUp);
+window.chipDragEnd = () => {
+  dragTaskId = null;
+  dragSourceColumnId = null;
+  document.querySelectorAll(".dragging, .drag-over").forEach(el => el.classList.remove("dragging", "drag-over"));
 };
 
-function cancelCandidate() {
-  if (!dragCtx) return;
-  clearTimeout(dragCtx.timer);
-  document.removeEventListener("pointermove", dragCtx.onMove);
-  document.removeEventListener("pointerup", dragCtx.onUp);
-  document.removeEventListener("pointercancel", dragCtx.onUp);
-  dragCtx = null;
-}
-
-function beginDrag(candidate, clientX, clientY) {
-  const chipEl = candidate.chipEl;
-  const rect = chipEl.getBoundingClientRect();
-  try { chipEl.setPointerCapture(candidate.pointerId); } catch (e) { /* ignore */ }
-
-  const ghost = chipEl.cloneNode(true);
-  ghost.classList.add("chip-ghost");
-  ghost.style.width = rect.width + "px";
-  ghost.style.left = rect.left + "px";
-  ghost.style.top = rect.top + "px";
-  document.body.appendChild(ghost);
-
-  const dropLine = document.createElement("div");
-  dropLine.className = "drop-line";
-
-  chipEl.setAttribute("data-dragging", "true");
-  chipEl.style.touchAction = "none";
-
-  Object.assign(candidate, {
-    active: true,
-    ghost, dropLine,
-    offsetX: clientX - rect.left, offsetY: clientY - rect.top,
-    sourceColumnId: chipEl.dataset.columnId,
-    targetColumnId: null, targetBeforeTaskId: undefined, // undefined = not yet resolved, null = insert at end
-    rafId: null, lastClientY: clientY
-  });
-  dragSuppressClick = true;
-  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
-
-  autoScrollLoop(candidate);
-}
-
-function handleDragPointerMove(e) {
+window.chipDragOver = (e, taskId) => {
+  if (!dragTaskId || dragTaskId === taskId) return;
   e.preventDefault();
-  const d = dragCtx;
-  d.lastClientY = e.clientY;
-  d.ghost.style.left = (e.clientX - d.offsetX) + "px";
-  d.ghost.style.top = (e.clientY - d.offsetY) + "px";
+  e.stopPropagation();
+  document.querySelectorAll(".chip.drag-over, .column-body.drag-over").forEach(el => el.classList.remove("drag-over"));
+  e.currentTarget.classList.add("drag-over");
+};
 
-  const prevPointerEvents = d.ghost.style.pointerEvents;
-  d.ghost.style.pointerEvents = "none";
-  const under = document.elementFromPoint(e.clientX, e.clientY);
-  d.ghost.style.pointerEvents = prevPointerEvents;
+window.chipDragLeave = (e) => {
+  e.currentTarget.classList.remove("drag-over");
+};
 
-  const columnBody = under && under.closest(".column-body");
-  if (!columnBody) {
-    if (d.dropLine.parentNode) d.dropLine.remove();
-    d.targetColumnId = null;
-    return;
-  }
-  d.targetColumnId = columnBody.dataset.columnId;
+window.chipDrop = async (e, beforeTaskId, targetColumnId) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove("drag-over");
+  if (!dragTaskId || dragTaskId === beforeTaskId) return;
+  await moveTask(dragTaskId, targetColumnId, beforeTaskId);
+};
 
-  const siblingChips = Array.from(columnBody.querySelectorAll(".chip"))
-    .filter(el => el.dataset.taskId !== d.taskId);
+// Dropping directly on a column's body (not on a specific chip) — used for an empty
+// column, or for dropping past the last chip to append at the end of the list.
+window.columnBodyDragOver = (e, columnId) => {
+  if (!dragTaskId) return;
+  e.preventDefault();
+  document.querySelectorAll(".chip.drag-over, .column-body.drag-over").forEach(el => el.classList.remove("drag-over"));
+  e.currentTarget.classList.add("drag-over");
+};
 
-  let beforeEl = null;
-  for (const el of siblingChips) {
-    const r = el.getBoundingClientRect();
-    if (e.clientY < r.top + r.height / 2) { beforeEl = el; break; }
-  }
+window.columnBodyDrop = async (e, columnId) => {
+  e.preventDefault();
+  e.currentTarget.classList.remove("drag-over");
+  if (!dragTaskId) return;
+  await moveTask(dragTaskId, columnId, null); // null = append at the end
+};
 
-  if (beforeEl) {
-    d.targetBeforeTaskId = beforeEl.dataset.taskId;
-    columnBody.insertBefore(d.dropLine, beforeEl);
-  } else {
-    d.targetBeforeTaskId = null; // end of list, before the "+ Add task" button
-    const addBtn = columnBody.querySelector(".add-task-btn");
-    columnBody.insertBefore(d.dropLine, addBtn || null);
-  }
-}
-
-function autoScrollLoop(candidate) {
-  const EDGE = 70, SPEED = 12;
-  const step = () => {
-    if (!candidate.active) return;
-    const stack = document.querySelector(".board-stack");
-    if (stack) {
-      const y = candidate.lastClientY;
-      if (y < EDGE) stack.scrollTop -= SPEED;
-      else if (y > window.innerHeight - EDGE) stack.scrollTop += SPEED;
-    }
-    candidate.rafId = requestAnimationFrame(step);
-  };
-  candidate.rafId = requestAnimationFrame(step);
-}
-
-async function finishDrag(e) {
-  const d = dragCtx;
-  if (d.rafId) cancelAnimationFrame(d.rafId);
-  document.removeEventListener("pointermove", d.onMove);
-  document.removeEventListener("pointerup", d.onUp);
-  document.removeEventListener("pointercancel", d.onUp);
-  d.ghost.remove();
-  if (d.dropLine.parentNode) d.dropLine.remove();
-  d.chipEl.removeAttribute("data-dragging");
-  d.chipEl.style.touchAction = "";
-
-  const task = state.tasks[d.taskId];
-  const targetColumnId = d.targetColumnId;
-  dragCtx = null;
-
-  if (!task || !targetColumnId) { render(); return; } // dropped outside any column — revert, no-op
+async function moveTask(taskId, targetColumnId, beforeTaskId) {
+  const task = state.tasks[taskId];
+  if (!task) return;
 
   const columns = Object.entries(state.household.columns || {}).map(([id, c]) => ({ id, ...c })).sort((a, b) => a.order - b.order);
   const doneColumnId = getDoneColumnId(columns);
 
   const siblings = Object.entries(state.tasks)
-    .filter(([id, t]) => t.columnId === targetColumnId && id !== d.taskId)
+    .filter(([id, t]) => t.columnId === targetColumnId && id !== taskId)
     .map(([id, t]) => ({ id, ...t }))
     .sort((a, b) => a.order - b.order);
 
   let newOrder;
   if (siblings.length === 0) {
     newOrder = Date.now();
-  } else if (d.targetBeforeTaskId === null) {
+  } else if (beforeTaskId === null) {
     newOrder = siblings[siblings.length - 1].order + 1;
   } else {
-    const idx = siblings.findIndex(s => s.id === d.targetBeforeTaskId);
+    const idx = siblings.findIndex(s => s.id === beforeTaskId);
     const next = siblings[idx];
     const prev = siblings[idx - 1];
     newOrder = prev ? (prev.order + next.order) / 2 : next.order - 1;
@@ -756,9 +649,9 @@ async function finishDrag(e) {
     updates.doneAt = null;
   }
 
-  state.tasks[d.taskId] = { ...task, ...updates }; // optimistic
+  state.tasks[taskId] = { ...task, ...updates }; // optimistic
   render();
-  await update(ref(db, `households/${state.householdId}/tasks/${d.taskId}`), updates);
+  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), updates);
 }
 
 // ---------- tasks ----------
@@ -854,7 +747,6 @@ window.handleToggleDone = async (taskId, event) => {
 // ---------- render ----------
 
 function render() {
-  if (dragCtx && dragCtx.active) return; // don't rebuild the board mid-drag; finishDrag() renders once it's done
   if (state.user === undefined) return; // auth state not resolved yet — keep showing the initial spinner
   if (!state.user) return renderSignIn();
   if (!state.householdsChecked) return; // still checking whether they belong to a household — keep spinner
@@ -1045,7 +937,8 @@ function renderColumn(col, tasks, members, doneColumnId) {
         </div>
       </div>
       ${isCollapsed ? "" : `
-        <div class="column-body" data-column-id="${col.id}">
+        <div class="column-body" data-column-id="${col.id}"
+             ondragover="columnBodyDragOver(event, '${col.id}')" ondrop="columnBodyDrop(event, '${col.id}')">
           ${sorted.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
           ${sorted.map(t => renderChip(t, members, doneColumnId)).join("")}
           <button class="add-task-btn" onclick="toggleExpand('new-${col.id}')">+ Add task</button>
@@ -1058,8 +951,14 @@ function renderChip(task, members, doneColumnId) {
   const assigneeMember = members[task.assignee];
   const isDone = task.columnId === doneColumnId;
   return `
-    <div class="chip ${isDone ? "done" : ""}" data-task-id="${task.id}" data-column-id="${task.columnId}"
-         onclick="handleChipClick('${task.id}')">
+    <div class="chip ${isDone ? "done" : ""}" id="chip-${task.id}" data-task-id="${task.id}" data-column-id="${task.columnId}"
+         draggable="true"
+         ondragstart="chipDragStart(event, '${task.id}', '${task.columnId}')"
+         ondragend="chipDragEnd()"
+         ondragover="chipDragOver(event, '${task.id}')"
+         ondragleave="chipDragLeave(event)"
+         ondrop="chipDrop(event, '${task.id}', '${task.columnId}')"
+         onclick="toggleExpand('${task.id}')">
       <div class="chip-tick" onclick="handleToggleDone('${task.id}', event)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
       </div>
@@ -1072,9 +971,6 @@ function renderChip(task, members, doneColumnId) {
             ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
           </div>
         ` : ""}
-      </div>
-      <div class="chip-handle" onpointerdown="handleChipPointerDown(event, '${task.id}')" onclick="event.stopPropagation()" aria-label="Drag to reorder">
-        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"></circle><circle cx="15" cy="6" r="1.5"></circle><circle cx="9" cy="12" r="1.5"></circle><circle cx="15" cy="12" r="1.5"></circle><circle cx="9" cy="18" r="1.5"></circle><circle cx="15" cy="18" r="1.5"></circle></svg>
       </div>
     </div>`;
 }
