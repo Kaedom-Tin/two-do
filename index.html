@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Two Do — v0.5.5</title>
+<title>Two Do — v0.6.0</title>
 <style>
   :root {
     --bg: #F7F7F5;
@@ -263,7 +263,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "0.5.5";
+const APP_VERSION = "0.6.0";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
@@ -294,8 +294,85 @@ function applyTheme() {
 }
 applyTheme();
 
+// ---------- offline: local cache + write queue ----------
+// The Firebase SDK already auto-queues writes in memory while offline and resends them
+// on reconnect — but only if the tab stays open. If the app is closed or reloaded while
+// offline, that in-memory queue is lost. These localStorage-backed helpers cover that gap,
+// and double as a read cache so the board can render immediately even before any network
+// connection is established (e.g. opening the app while offline).
+const CACHE_PREFIX = "twoDoCache:";
+const QUEUE_KEY = "twoDoWriteQueue";
+
+function loadCache(uid) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + uid);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function persistCache() {
+  if (!state.user || !state.householdId) return;
+  try {
+    localStorage.setItem(CACHE_PREFIX + state.user.uid, JSON.stringify({
+      householdId: state.householdId, household: state.household, tasks: state.tasks
+    }));
+  } catch (e) { /* storage full or unavailable — cache is best-effort */ }
+}
+
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; }
+}
+function saveQueue() {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(writeQueue)); } catch (e) {}
+}
+let writeQueue = loadQueue();
+
+function sendWrite(item) {
+  const r = item.path ? ref(db, item.path) : ref(db);
+  if (item.type === "update") return update(r, item.data);
+  if (item.type === "set") return set(r, item.data);
+  if (item.type === "remove") return remove(r);
+}
+
+// Every mutation in the app goes through here instead of calling update/set/remove
+// directly. Online, it fires immediately. Offline, it's queued (persisted, so it survives
+// a closed tab) — the caller is expected to have already applied the change optimistically
+// to local state before calling this, so the UI never blocks on network either way.
+function queueOrSend(type, path, data) {
+  if (state.connected) {
+    sendWrite({ type, path, data }).catch(() => {
+      writeQueue.push({ id: crypto.randomUUID(), type, path, data });
+      saveQueue();
+    });
+  } else {
+    writeQueue.push({ id: crypto.randomUUID(), type, path, data });
+    saveQueue();
+    render();
+  }
+}
+
+async function flushQueue() {
+  if (writeQueue.length === 0) return;
+  const pending = [...writeQueue];
+  for (const item of pending) {
+    try {
+      await sendWrite(item);
+      writeQueue = writeQueue.filter(w => w.id !== item.id);
+      saveQueue();
+    } catch (e) {
+      break; // keep remaining items queued in order, retry on the next reconnect
+    }
+  }
+  render();
+}
+
+let wasConnected = false;
 onValue(ref(db, ".info/connected"), (snap) => {
-  state.connected = snap.val() === true;
+  const nowConnected = snap.val() === true;
+  const justReconnected = nowConnected && !wasConnected;
+  wasConnected = nowConnected;
+  state.connected = nowConnected;
+  if (justReconnected) flushQueue();
   render();
 });
 
@@ -339,7 +416,19 @@ onAuthStateChanged(auth, (user) => {
   state.tasks = {};
   state.householdsChecked = false;
   if (user) {
-    loadUserHouseholds(user.uid);
+    const cached = loadCache(user.uid);
+    if (cached && cached.householdId) {
+      // Render instantly from the last-known state, then attach live listeners (which
+      // quietly wait for connectivity if we're offline) to bring it up to date.
+      state.householdId = cached.householdId;
+      state.household = cached.household;
+      state.tasks = cached.tasks || {};
+      state.householdsChecked = true;
+      attachHouseholdListeners(cached.householdId);
+      render();
+    } else {
+      loadUserHouseholds(user.uid);
+    }
   } else {
     render();
   }
@@ -359,10 +448,12 @@ async function loadUserHouseholds(uid) {
 function attachHouseholdListeners(householdId) {
   householdListenerUnsub = onValue(ref(db, `households/${householdId}`), (snap) => {
     state.household = snap.val();
+    persistCache();
     render();
   });
   tasksListenerUnsub = onValue(ref(db, `households/${householdId}/tasks`), (snap) => {
     state.tasks = snap.val() || {};
+    persistCache();
     render();
   });
 }
@@ -395,6 +486,7 @@ window.setSetupMode = (mode) => {
 window.handleCreateHousehold = async (formEl) => {
   const name = formEl.householdName.value.trim();
   if (!name) { state.setupError = "Enter a household name."; render(); return; }
+  if (!state.connected) { state.setupError = "You'll need a connection to create a household."; render(); return; }
   const uid = state.user.uid;
   const displayName = state.user.displayName || state.user.email || "Member";
 
@@ -434,6 +526,7 @@ window.handleJoinHousehold = async (formEl) => {
     render();
     return;
   }
+  if (!state.connected) { state.setupError = "You'll need a connection to join a household."; render(); return; }
   const snap = await get(ref(db, `joinCodes/${rawCode}`));
   if (!snap.exists()) {
     state.setupError = "That code wasn't found. Check it and try again.";
@@ -520,16 +613,23 @@ window.handleAddColumn = async (formEl) => {
   const columns = Object.values(state.household.columns || {});
   if (columns.length >= MAX_COLUMNS) return;
   const maxOrder = columns.reduce((max, c) => Math.max(max, c.order), -1);
-  const newRef = push(ref(db, `households/${state.householdId}/columns`));
-  await set(newRef, { name, order: maxOrder + 1 });
-  formEl.reset();
+  const newId = push(ref(db, `households/${state.householdId}/columns`)).key;
+  const newColumn = { name, order: maxOrder + 1 };
+  state.household.columns[newId] = newColumn; // optimistic
+  persistCache();
   render();
+  formEl.reset();
+  queueOrSend("set", `households/${state.householdId}/columns/${newId}`, newColumn);
 };
 
 window.handleRenameColumn = async (columnId, newName) => {
   const name = newName.trim();
   if (!name) return; // ignore blank rename attempts, keep the existing name
-  await update(ref(db, `households/${state.householdId}/columns/${columnId}`), { name });
+  if (state.household.columns[columnId]) {
+    state.household.columns[columnId].name = name; // optimistic
+    persistCache();
+  }
+  queueOrSend("update", `households/${state.householdId}/columns/${columnId}`, { name });
 };
 
 window.handleMoveColumn = async (columnId, direction) => {
@@ -545,13 +645,20 @@ window.handleMoveColumn = async (columnId, direction) => {
   const updates = {};
   updates[`households/${state.householdId}/columns/${a.id}/order`] = b.order;
   updates[`households/${state.householdId}/columns/${b.id}/order`] = a.order;
-  await update(ref(db), updates);
+  state.household.columns[a.id].order = b.order; // optimistic
+  state.household.columns[b.id].order = a.order;
+  persistCache();
+  render();
+  queueOrSend("update", "", updates);
 };
 
 window.handleDeleteColumn = async (columnId) => {
   const hasTasks = Object.values(state.tasks).some(t => t.columnId === columnId);
   if (hasTasks) return; // guarded in the UI too, but double-check before writing
-  await remove(ref(db, `households/${state.householdId}/columns/${columnId}`));
+  delete state.household.columns[columnId]; // optimistic
+  persistCache();
+  render();
+  queueOrSend("remove", `households/${state.householdId}/columns/${columnId}`, null);
 };
 
 // ---------- drag to reorder / move chips ----------
@@ -648,8 +755,9 @@ async function moveTask(taskId, targetColumnId, beforeTaskId) {
   }
 
   state.tasks[taskId] = { ...task, ...updates }; // optimistic
+  persistCache();
   render();
-  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), updates);
+  queueOrSend("update", `households/${state.householdId}/tasks/${taskId}`, updates);
 }
 
 // ---------- tasks ----------
@@ -683,34 +791,39 @@ window.handleAddTask = async (columnId, formEl) => {
   const assignee = formEl.assignee.value;
   const dueDate = formEl.dueDate.value;
 
-  const newRef = push(ref(db, `households/${state.householdId}/tasks`));
-  await set(newRef, {
-    title, notes, assignee, dueDate, columnId,
-    order: Date.now(), updatedAt: Date.now()
-  });
+  const newId = push(ref(db, `households/${state.householdId}/tasks`)).key;
+  const newTask = { title, notes, assignee, dueDate, columnId, order: Date.now(), updatedAt: Date.now() };
+  state.tasks[newId] = newTask; // optimistic
+  persistCache();
   state.expanded = null;
   render();
+  queueOrSend("set", `households/${state.householdId}/tasks/${newId}`, newTask);
 };
 
 window.handleSaveTask = async (taskId, formEl) => {
   const title = formEl.title.value.trim();
   if (!title) return;
-  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), {
+  const updates = {
     title,
     notes: formEl.notes.value.trim(),
     assignee: formEl.assignee.value,
     dueDate: formEl.dueDate.value,
     updatedAt: Date.now()
-  });
+  };
+  state.tasks[taskId] = { ...state.tasks[taskId], ...updates }; // optimistic
+  persistCache();
   state.expanded = null;
   render();
+  queueOrSend("update", `households/${state.householdId}/tasks/${taskId}`, updates);
 };
 
 window.handleDeleteTask = async (taskId) => {
-  await remove(ref(db, `households/${state.householdId}/tasks/${taskId}`));
+  delete state.tasks[taskId]; // optimistic
+  persistCache();
   state.expanded = null;
   state.confirmingDelete = null;
   render();
+  queueOrSend("remove", `households/${state.householdId}/tasks/${taskId}`, null);
 };
 
 window.toggleColumnCollapsed = (columnId) => {
@@ -736,10 +849,11 @@ window.handleToggleDone = async (taskId, event) => {
     updates = { columnId: doneColumnId, previousColumnId: task.columnId, doneAt: Date.now() };
   }
 
-  // Optimistic local update so the tick feels instant; the onValue listener reconciles once Firebase confirms.
+  // Optimistic local update so the tick feels instant regardless of connectivity.
   state.tasks[taskId] = { ...task, ...updates };
+  persistCache();
   render();
-  await update(ref(db, `households/${state.householdId}/tasks/${taskId}`), updates);
+  queueOrSend("update", `households/${state.householdId}/tasks/${taskId}`, updates);
 };
 
 // ---------- render ----------
@@ -854,7 +968,7 @@ function renderSettingsSheet(h) {
           <span>Sync status</span>
           <span class="sync-badge">
             <span class="sync-dot ${state.connected ? "online" : "offline"}"></span>
-            ${state.connected ? "Synced" : "Offline"}
+            ${state.connected ? "Synced" : (writeQueue.length > 0 ? `Offline · ${writeQueue.length} pending` : "Offline")}
           </span>
         </div>
         <div class="settings-row" style="display:block;">
