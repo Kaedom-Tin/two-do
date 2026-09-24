@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.3.0</title>
+<title>Two Do — v1.4.0</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -42,6 +42,10 @@
     --radius-lg: 14px;  /* cards, columns */
     --radius-xl: 18px;  /* bottom sheets */
     --radius-full: 999px; /* circles, pills */
+
+    /* Elevation — tinted with --text rather than plain black, to keep shadows on-hue */
+    --shadow-sm: 0 1px 3px rgba(17,28,44,0.12), 0 1px 2px rgba(17,28,44,0.08);
+    --shadow-lg: 0 10px 30px rgba(17,28,44,0.18), 0 2px 8px rgba(17,28,44,0.10);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -56,6 +60,8 @@
       --danger: #F39A92;
       --danger-solid: #C1443D;
       --col-bg: #1C2A40;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+      --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
     }
   }
   :root[data-theme="dark"] {
@@ -70,6 +76,8 @@
     --danger: #F39A92;
     --danger-solid: #C1443D;
     --col-bg: #1C2A40;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
   }
   * { box-sizing: border-box; }
   a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible,
@@ -112,6 +120,7 @@
   .setup-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
     padding: var(--space-5); width: 100%; max-width: 360px; text-align: left;
+    box-shadow: var(--shadow-lg);
   }
   .setup-card h2 { margin: 0 0 var(--space-1); font-size: 18px; }
   .setup-card p.hint { color: var(--text-muted); font-size: 13px; margin: 0 0 var(--space-4); }
@@ -177,13 +186,13 @@
 
   .board-stack {
     flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: var(--space-3);
+    display: flex; flex-direction: column; gap: var(--space-6);
   }
   .column {
-    background: var(--col-bg); border-radius: var(--radius-lg); overflow: hidden;
+    background: none;
   }
   .column-header {
-    padding: var(--space-3) var(--space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+    padding: var(--space-2) 0 var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
     cursor: pointer;
   }
   .column-header .name { font-weight: 700; font-size: 14px; letter-spacing: 0.2px; text-transform: uppercase; color: var(--heading); }
@@ -196,15 +205,16 @@
   }
   .header-add-btn svg { width: 18px; height: 18px; display: block; }
   .column.collapsed .chevron { transform: rotate(-90deg); }
-  .column-body { padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+  .column-body { padding: 0 0 var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); }
   .empty-col { color: var(--text-muted); font-size: 13px; text-align: center; padding: var(--space-4) var(--space-1); }
 
   .chip {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface); border-radius: var(--radius-md);
     padding: var(--space-3); font-size: 14px; cursor: grab; color: var(--text);
     display: flex; align-items: flex-start; gap: var(--space-3);
+    box-shadow: var(--shadow-sm);
   }
-  .chip.done { border-color: var(--border); }
+  .chip.done { box-shadow: none; }
   .chip.done .chip-title { text-decoration: line-through; color: var(--text-muted); }
   .chip.dragging { opacity: 0.35; }
   .chip.drag-over { border: 2px dashed var(--accent); background: var(--col-bg); }
@@ -239,6 +249,7 @@
     background: var(--surface); width: 100%; max-height: 85vh; overflow-y: auto;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding: var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
+    box-shadow: var(--shadow-lg);
   }
   .sheet-card h2 { margin: 0 0 var(--space-3); font-size: 16px; }
   .chip-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
@@ -290,7 +301,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
