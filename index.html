@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.4.1</title>
+<title>Two Do — v1.4.2</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -43,6 +43,8 @@
     --radius-xl: 18px;  /* bottom sheets */
     --radius-full: 999px; /* circles, pills */
 
+    --divider: #E1E5EA; /* neutral light grey — deliberately not blue-tinted, for a calmer row separator */
+
     /* Elevation — tinted with --text rather than plain black, to keep shadows on-hue */
     --shadow-lg: 0 10px 30px rgba(17,28,44,0.18), 0 2px 8px rgba(17,28,44,0.10);
   }
@@ -59,6 +61,7 @@
       --danger: #F39A92;
       --danger-solid: #C1443D;
       --col-bg: #1C2A40;
+      --divider: #3D4A5E;
       --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
     }
   }
@@ -74,6 +77,7 @@
     --danger: #F39A92;
     --danger-solid: #C1443D;
     --col-bg: #1C2A40;
+    --divider: #3D4A5E;
     --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
   }
   * { box-sizing: border-box; }
@@ -206,7 +210,7 @@
   .empty-col { color: var(--text-muted); font-size: 13px; text-align: center; padding: var(--space-4) var(--space-1); }
 
   .chip {
-    background: var(--surface); border-bottom: 1px solid var(--border);
+    background: var(--surface); border-bottom: 2px solid var(--divider);
     padding: var(--space-3); font-size: 14px; cursor: grab; color: var(--text);
     display: flex; align-items: flex-start; gap: var(--space-3);
   }
@@ -229,8 +233,9 @@
   .chip-notes {
     font-size: 12px; color: var(--text-muted); margin-top: var(--space-1);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    height: 16px; line-height: 16px;
   }
-  .chip-meta { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+  .chip-meta { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); height: 18px; }
   .chip-assignee {
     width: 18px; height: 18px; border-radius: var(--radius-full); background: var(--accent); color: #fff;
     font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -298,7 +303,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.4.2";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
@@ -1171,13 +1176,11 @@ function renderChip(task, members, doneColumnId) {
       </div>
       <div class="chip-content">
         <div class="chip-title">${escapeHtml(task.title)}</div>
-        ${task.notes ? `<div class="chip-notes">${escapeHtml(task.notes)}</div>` : ""}
-        ${(assigneeMember || task.dueDate) ? `
-          <div class="chip-meta">
-            ${assigneeMember ? `<div class="chip-assignee">${initials(assigneeMember.displayName)}</div>` : ""}
-            ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
-          </div>
-        ` : ""}
+        <div class="chip-notes">${escapeHtml(task.notes || "")}</div>
+        <div class="chip-meta">
+          ${assigneeMember ? `<div class="chip-assignee">${initials(assigneeMember.displayName)}</div>` : ""}
+          ${task.dueDate ? `<div class="chip-due">${formatDateDMY(task.dueDate)}</div>` : ""}
+        </div>
       </div>
     </div>`;
 }
