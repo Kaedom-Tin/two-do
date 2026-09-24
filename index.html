@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.4.0</title>
+<title>Two Do — v1.4.1</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -44,7 +44,6 @@
     --radius-full: 999px; /* circles, pills */
 
     /* Elevation — tinted with --text rather than plain black, to keep shadows on-hue */
-    --shadow-sm: 0 1px 3px rgba(17,28,44,0.12), 0 1px 2px rgba(17,28,44,0.08);
     --shadow-lg: 0 10px 30px rgba(17,28,44,0.18), 0 2px 8px rgba(17,28,44,0.10);
   }
   @media (prefers-color-scheme: dark) {
@@ -60,7 +59,6 @@
       --danger: #F39A92;
       --danger-solid: #C1443D;
       --col-bg: #1C2A40;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
       --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
     }
   }
@@ -76,7 +74,6 @@
     --danger: #F39A92;
     --danger-solid: #C1443D;
     --col-bg: #1C2A40;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
     --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
   }
   * { box-sizing: border-box; }
@@ -205,16 +202,16 @@
   }
   .header-add-btn svg { width: 18px; height: 18px; display: block; }
   .column.collapsed .chevron { transform: rotate(-90deg); }
-  .column-body { padding: 0 0 var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); }
+  .column-body { padding: 0 0 var(--space-2); display: flex; flex-direction: column; gap: 0; }
   .empty-col { color: var(--text-muted); font-size: 13px; text-align: center; padding: var(--space-4) var(--space-1); }
 
   .chip {
-    background: var(--surface); border-radius: var(--radius-md);
+    background: var(--surface); border-bottom: 1px solid var(--border);
     padding: var(--space-3); font-size: 14px; cursor: grab; color: var(--text);
     display: flex; align-items: flex-start; gap: var(--space-3);
-    box-shadow: var(--shadow-sm);
   }
-  .chip.done { box-shadow: none; }
+  .chip:first-child { border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md); }
+  .chip:last-child { border-bottom-left-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); border-bottom: none; }
   .chip.done .chip-title { text-decoration: line-through; color: var(--text-muted); }
   .chip.dragging { opacity: 0.35; }
   .chip.drag-over { border: 2px dashed var(--accent); background: var(--col-bg); }
@@ -301,7 +298,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.4.1";
 const MAX_COLUMNS = 10;
 
 const appEl = document.getElementById("app");
