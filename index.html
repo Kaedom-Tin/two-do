@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.6.0</title>
+<title>Two Do — v1.6.1</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -153,7 +153,8 @@
     padding: var(--space-2) var(--space-3) var(--space-4);
   }
   .calendar-cell {
-    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: flex-start; padding-top: var(--space-2);
     border-radius: var(--radius-sm); cursor: pointer; position: relative; gap: 2px;
   }
   .calendar-cell.empty { cursor: default; }
@@ -162,10 +163,32 @@
     color: var(--accent-contrast); background: var(--accent); border-radius: var(--radius-full);
     width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
   }
+  .calendar-day-badge-slot { height: 15px; display: flex; align-items: center; justify-content: center; }
   .calendar-day-badge {
     font-size: 10px; font-weight: 700; color: #fff; background: var(--heading);
     border-radius: var(--radius-full); min-width: 15px; height: 15px; padding: 0 3px;
     display: flex; align-items: center; justify-content: center;
+  }
+  .calendar-day-tasks { display: none; width: 100%; }
+  .calendar-task-row {
+    font-size: 9px; line-height: 12px; color: var(--text); text-align: left; padding: 0 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
+  }
+  .calendar-task-row:active { background: var(--col-bg); border-radius: 3px; }
+  .calendar-more-row { font-size: 9px; line-height: 12px; color: var(--text-muted); padding: 0 3px; }
+  .calendar-body { flex: 1; overflow-y: auto; }
+  .calendar-undated-section { padding: var(--space-4) var(--space-4) 0; }
+  .calendar-undated-heading {
+    font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.3px; margin-bottom: var(--space-1);
+  }
+
+  @media (orientation: landscape) {
+    .calendar-cell { aspect-ratio: auto; min-height: 92px; align-items: stretch; padding: var(--space-1); }
+    .calendar-day-num { align-self: flex-start; margin-left: 2px; }
+    .calendar-cell.today .calendar-day-num { align-self: flex-start; }
+    .calendar-day-badge-slot { display: none; }
+    .calendar-day-tasks { display: block; }
   }
 
   /* --- Board screen --- */
@@ -351,7 +374,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.6.1";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -374,6 +397,7 @@ let state = {
   calendarYear: null,   // set on first open to the current year
   calendarMonth: null,  // 0-indexed, set on first open to the current month
   calendarSelectedDay: null, // ISO date string ("YYYY-MM-DD") whose task sheet is open, or null
+  calendarUndatedColumnId: null, // columnId whose no-due-date task sheet is open, or null
   collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
   theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
   connected: false,     // live Firebase RTDB connection status
@@ -786,6 +810,16 @@ window.openCalendarDay = (dateStr) => {
 
 window.closeCalendarDay = () => {
   state.calendarSelectedDay = null;
+  render();
+};
+
+window.openUndatedTasks = (columnId) => {
+  state.calendarUndatedColumnId = columnId;
+  render();
+};
+
+window.closeUndatedTasks = () => {
+  state.calendarUndatedColumnId = null;
   render();
 };
 
@@ -1319,6 +1353,12 @@ function renderCalendarView() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // Columns other than Done, with a count of their active tasks that have no due date.
+  const undatedByColumn = columns.filter(c => c.id !== doneColumnId).map(c => ({
+    ...c,
+    count: Object.values(state.tasks).filter(t => t.columnId === c.id && !t.dueDate).length
+  }));
+
   appEl.innerHTML = `
     <div class="board-header">
       <button class="icon-btn" onclick="closeCalendar()" aria-label="Back to board">
@@ -1336,23 +1376,42 @@ function renderCalendarView() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
       </button>
     </div>
-    <div class="calendar-weekday-row">
-      ${WEEKDAY_LABELS.map(l => `<div class="calendar-weekday">${l}</div>`).join("")}
+    <div class="calendar-body">
+      <div class="calendar-weekday-row">
+        ${WEEKDAY_LABELS.map(l => `<div class="calendar-weekday">${l}</div>`).join("")}
+      </div>
+      <div class="calendar-grid">
+        ${cells.map(day => {
+          if (day === null) return `<div class="calendar-cell empty"></div>`;
+          const dateStr = isoDateFor(year, month, day);
+          const dayTasks = (tasksByDate[dateStr] || []).sort((a, b) => a.order - b.order);
+          const isToday = dateStr === todayIso;
+          const shown = dayTasks.slice(0, 5);
+          const overflow = dayTasks.length - shown.length;
+          return `
+            <div class="calendar-cell ${isToday ? "today" : ""}" onclick="openCalendarDay('${dateStr}')">
+              <div class="calendar-day-num">${day}</div>
+              <div class="calendar-day-badge-slot">${dayTasks.length > 0 ? `<div class="calendar-day-badge">${dayTasks.length > 9 ? "9+" : dayTasks.length}</div>` : ""}</div>
+              <div class="calendar-day-tasks">
+                ${shown.map(t => `<div class="calendar-task-row" onclick="event.stopPropagation(); toggleExpand('${t.id}')">${escapeHtml(truncateLine(t.title))}</div>`).join("")}
+                ${overflow > 0 ? `<div class="calendar-more-row">+${overflow} more</div>` : ""}
+              </div>
+            </div>`;
+        }).join("")}
+      </div>
+      <div class="calendar-undated-section">
+        <div class="calendar-undated-heading">No due date</div>
+        ${undatedByColumn.map(c => `
+          <div class="settings-row" style="cursor:pointer;" onclick="openUndatedTasks('${c.id}')">
+            <span>${escapeHtml(c.name)}</span>
+            <span class="chip-due">${c.count}</span>
+          </div>
+        `).join("")}
+      </div>
     </div>
-    <div class="calendar-grid">
-      ${cells.map(day => {
-        if (day === null) return `<div class="calendar-cell empty"></div>`;
-        const dateStr = isoDateFor(year, month, day);
-        const dayTasks = tasksByDate[dateStr] || [];
-        const isToday = dateStr === todayIso;
-        return `
-          <div class="calendar-cell ${isToday ? "today" : ""}" onclick="openCalendarDay('${dateStr}')">
-            <div class="calendar-day-num">${day}</div>
-            ${dayTasks.length > 0 ? `<div class="calendar-day-badge">${dayTasks.length > 9 ? "9+" : dayTasks.length}</div>` : ""}
-          </div>`;
-      }).join("")}
-    </div>
-    ${state.calendarSelectedDay ? renderCalendarDaySheet(state.calendarSelectedDay, tasksByDate[state.calendarSelectedDay] || [], members, doneColumnId) : ""}`;
+    ${renderSheet(members)}
+    ${state.calendarSelectedDay ? renderCalendarDaySheet(state.calendarSelectedDay, tasksByDate[state.calendarSelectedDay] || [], members, doneColumnId) : ""}
+    ${state.calendarUndatedColumnId ? renderUndatedTasksSheet(state.calendarUndatedColumnId, members, doneColumnId) : ""}`;
 }
 
 function renderCalendarDaySheet(dateStr, tasks, members, doneColumnId) {
@@ -1368,6 +1427,25 @@ function renderCalendarDaySheet(dateStr, tasks, members, doneColumnId) {
           : `<div class="column-body" style="padding:0;">${sorted.map(t => renderChip(t, members, doneColumnId)).join("")}</div>`
         }
         <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeCalendarDay()">Close</button>
+      </div>
+    </div>`;
+}
+
+function renderUndatedTasksSheet(columnId, members, doneColumnId) {
+  const col = state.household.columns[columnId];
+  const tasks = Object.entries(state.tasks)
+    .filter(([id, t]) => t.columnId === columnId && !t.dueDate)
+    .map(([id, t]) => ({ id, ...t }))
+    .sort((a, b) => a.order - b.order);
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeUndatedTasks();">
+      <div class="sheet-card">
+        <h2>${escapeHtml(col ? col.name : "")} · No due date</h2>
+        ${tasks.length === 0
+          ? `<div class="empty-col">Nothing here.</div>`
+          : `<div class="column-body" style="padding:0;">${tasks.map(t => renderChip(t, members, doneColumnId)).join("")}</div>`
+        }
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeUndatedTasks()">Close</button>
       </div>
     </div>`;
 }
