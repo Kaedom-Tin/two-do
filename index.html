@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.6.1</title>
+<title>Two Do — v1.6.2</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -374,7 +374,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.6.1";
+const APP_VERSION = "1.6.2";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -1409,9 +1409,9 @@ function renderCalendarView() {
         `).join("")}
       </div>
     </div>
-    ${renderSheet(members)}
     ${state.calendarSelectedDay ? renderCalendarDaySheet(state.calendarSelectedDay, tasksByDate[state.calendarSelectedDay] || [], members, doneColumnId) : ""}
-    ${state.calendarUndatedColumnId ? renderUndatedTasksSheet(state.calendarUndatedColumnId, members, doneColumnId) : ""}`;
+    ${state.calendarUndatedColumnId ? renderUndatedTasksSheet(state.calendarUndatedColumnId, members, doneColumnId) : ""}
+    ${renderSheet(members)}`;
 }
 
 function renderCalendarDaySheet(dateStr, tasks, members, doneColumnId) {
