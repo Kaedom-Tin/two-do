@@ -1,7 +1,7 @@
 // Two Do — app shell service worker.
 // Bump CACHE_NAME whenever index.html or any shell file changes, so clients pick up
 // the new version instead of serving a stale cached copy indefinitely.
-const CACHE_NAME = "two-do-shell-v14";
+const CACHE_NAME = "two-do-shell-v15";
 
 const SHELL_PATHS = [
   "./",
