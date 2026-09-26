@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.8.1</title>
+<title>Two Do — v1.9.0</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -268,14 +268,14 @@
   }
   .column-header .name { font-weight: 700; font-size: 14px; letter-spacing: 0.2px; text-transform: uppercase; color: var(--heading); }
   .column-header .count { font-size: 12px; color: var(--text-muted); margin-left: var(--space-2); font-weight: 500; }
-  .column-header .chevron { transition: transform 0.15s ease; color: var(--text-muted); flex-shrink: 0; }
+  .column-header .chevron { transition: transform 0.15s ease; color: var(--text-muted); flex-shrink: 0; transform: rotate(180deg); }
   .column-header .chevron svg { width: 18px; height: 18px; display: block; }
   .header-add-btn {
     background: none; color: var(--heading); padding: var(--space-1); flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm);
   }
   .header-add-btn svg { width: 18px; height: 18px; display: block; }
-  .column.collapsed .chevron { transform: rotate(-90deg); }
+  .column.collapsed .chevron { transform: rotate(0deg); }
   .column-body { padding: 0 0 var(--space-2); display: flex; flex-direction: column; gap: 0; }
   .empty-col { color: var(--text-muted); font-size: 13px; text-align: center; padding: var(--space-4) var(--space-1); }
 
@@ -334,11 +334,28 @@
     border-radius: var(--radius-full); animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  #update-banner {
+    display: none; position: fixed; left: var(--space-3); right: var(--space-3);
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+    background: var(--heading); color: #fff; padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md); align-items: center; justify-content: space-between;
+    gap: var(--space-3); z-index: 200; box-shadow: var(--shadow-lg); font-size: 14px; font-weight: 600;
+  }
+  #update-banner.visible { display: flex; }
+  #update-banner button {
+    background: #fff; color: var(--heading); font-weight: 700; font-size: 13px;
+    padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <div class="center-screen"><div class="spinner"></div></div>
+</div>
+<div id="update-banner">
+  <span>Update available</span>
+  <button onclick="window.location.reload()">Refresh</button>
 </div>
 
 <script type="module">
@@ -367,7 +384,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.8.1";
+const APP_VERSION = "1.9.0";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -1500,14 +1517,15 @@ function renderSortSheet(columnId) {
     <div class="sheet-backdrop" onclick="if(event.target===this) closeSortSheet();">
       <div class="sheet-card">
         <h2>Sort ${escapeHtml(col ? col.name : "")}</h2>
-        <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 var(--space-4);">These reorder the tasks for everyone — a one-time sort, not a live filter.</p>
-        <button class="btn-secondary" style="width:100%; justify-content:center;" onclick="applySortColumn('${columnId}', 'az')">A–Z</button>
+        <div class="settings-row" style="border-bottom:none; padding-bottom:0;">
+          <span>Reorder <span style="font-size:11px; font-weight:400; color:var(--text-muted);">— everyone, one-time</span></span>
+        </div>
+        <button class="btn-secondary" style="width:100%; margin-top: var(--space-2); justify-content:center;" onclick="applySortColumn('${columnId}', 'az')">A–Z</button>
         <button class="btn-secondary" style="width:100%; margin-top:10px; justify-content:center;" onclick="applySortColumn('${columnId}', 'date')">Date (undated last)</button>
         <div class="settings-row" style="margin-top: var(--space-4);">
-          <span>My Tasks First</span>
+          <span>My Tasks First <span style="font-size:11px; font-weight:400; color:var(--text-muted);">— this device only</span></span>
           <button class="code-btn" onclick="toggleMyTasksFirst('${columnId}')">${myTasksFirst ? "On" : "Off"}</button>
         </div>
-        <p style="color: var(--text-muted); font-size: 12px; margin: var(--space-1) 0 0;">Just for you — a personal view on this device, doesn't change anyone else's order.</p>
         <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeSortSheet()">Close</button>
       </div>
     </div>`;
@@ -1668,10 +1686,27 @@ function renderSheet(members) {
 render();
 
 if ("serviceWorker" in navigator) {
+  // If a controller already exists before this page finished loading, we're not on a fresh
+  // install — so a later controllerchange really is a new version taking over, not just the
+  // very first activation. Only the former should show the "Update available" banner.
+  const hadControllerAtLoad = !!navigator.serviceWorker.controller;
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    navigator.serviceWorker.register("./sw.js").then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(() => {});
+      });
+      setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000); // re-check every 5 minutes while open
+    }).catch(() => {
       // Offline app-shell caching just won't be available — the app still works fine online.
     });
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadControllerAtLoad) {
+      document.getElementById("update-banner").classList.add("visible");
+    }
   });
 }
 </script>
