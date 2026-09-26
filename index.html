@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.8.0</title>
+<title>Two Do — v1.8.1</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -367,7 +367,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.8.1";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -392,6 +392,7 @@ let state = {
   calendarSelectedDay: null, // ISO date string ("YYYY-MM-DD") whose task sheet is open, or null
   calendarUndatedColumnId: null, // columnId whose no-due-date task sheet is open, or null
   sortSheetColumnId: null, // columnId whose sort-options sheet is open, or null
+  myTasksFirstColumns: JSON.parse(localStorage.getItem("twoDoMyTasksFirst") || "{}"), // personal per-device view toggle, columnId -> bool; never synced to Firebase
   collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
   theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
   connected: false,     // live Firebase RTDB connection status
@@ -832,7 +833,8 @@ window.closeSortSheet = () => {
 window.applySortColumn = async (columnId, mode) => {
   const tasks = Object.entries(state.tasks)
     .filter(([id, t]) => t.columnId === columnId)
-    .map(([id, t]) => ({ id, ...t }));
+    .map(([id, t]) => ({ id, ...t }))
+    .sort((a, b) => a.order - b.order); // establish current order as the stable baseline for ties below
 
   let sorted;
   if (mode === "az") {
@@ -842,7 +844,7 @@ window.applySortColumn = async (columnId, mode) => {
       if (a.dueDate && b.dueDate) return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0;
       if (a.dueDate && !b.dueDate) return -1;
       if (!a.dueDate && b.dueDate) return 1;
-      return a.order - b.order;
+      return 0; // same date (or both undated) — keep current relative order, established by the pre-sort above
     });
   }
 
@@ -855,6 +857,12 @@ window.applySortColumn = async (columnId, mode) => {
   state.sortSheetColumnId = null;
   render();
   queueOrSend("update", "", updates);
+};
+
+window.toggleMyTasksFirst = (columnId) => {
+  state.myTasksFirstColumns[columnId] = !state.myTasksFirstColumns[columnId];
+  try { localStorage.setItem("twoDoMyTasksFirst", JSON.stringify(state.myTasksFirstColumns)); } catch (e) {}
+  render();
 };
 
 // ---------- columns manager ----------
@@ -1487,14 +1495,20 @@ function renderUndatedTasksSheet(columnId, members, doneColumnId) {
 
 function renderSortSheet(columnId) {
   const col = state.household.columns[columnId];
+  const myTasksFirst = !!state.myTasksFirstColumns[columnId];
   return `
     <div class="sheet-backdrop" onclick="if(event.target===this) closeSortSheet();">
       <div class="sheet-card">
         <h2>Sort ${escapeHtml(col ? col.name : "")}</h2>
-        <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 var(--space-4);">This reorders the tasks for everyone — it's a one-time sort, not a live filter.</p>
+        <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 var(--space-4);">These reorder the tasks for everyone — a one-time sort, not a live filter.</p>
         <button class="btn-secondary" style="width:100%; justify-content:center;" onclick="applySortColumn('${columnId}', 'az')">A–Z</button>
         <button class="btn-secondary" style="width:100%; margin-top:10px; justify-content:center;" onclick="applySortColumn('${columnId}', 'date')">Date (undated last)</button>
-        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeSortSheet()">Cancel</button>
+        <div class="settings-row" style="margin-top: var(--space-4);">
+          <span>My Tasks First</span>
+          <button class="code-btn" onclick="toggleMyTasksFirst('${columnId}')">${myTasksFirst ? "On" : "Off"}</button>
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px; margin: var(--space-1) 0 0;">Just for you — a personal view on this device, doesn't change anyone else's order.</p>
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeSortSheet()">Close</button>
       </div>
     </div>`;
 }
@@ -1502,9 +1516,14 @@ function renderSortSheet(columnId) {
 function renderColumn(col, tasks, members, doneColumnId) {
   const isCollapsed = !!state.collapsedColumns[col.id];
   const isDoneColumn = col.id === doneColumnId;
-  const sorted = isDoneColumn
+  let sorted = isDoneColumn
     ? [...tasks].sort((a, b) => (b.doneAt || b.order || 0) - (a.doneAt || a.order || 0))
     : [...tasks].sort((a, b) => a.order - b.order);
+
+  if (!isDoneColumn && state.myTasksFirstColumns[col.id]) {
+    const myUid = state.user.uid;
+    sorted = [...sorted].sort((a, b) => (a.assignee === myUid ? 0 : 1) - (b.assignee === myUid ? 0 : 1));
+  }
 
   return `
     <div class="column ${isCollapsed ? "collapsed" : ""}">
