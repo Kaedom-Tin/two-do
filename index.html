@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.14.1</title>
+<title>Two Do — v1.15.0</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -51,11 +51,11 @@
     /* Font-size scale — 12px (9pt) is the anchor for regular content (chip titles, labels,
        buttons, body text). Adjust these tokens, not individual rules, to retune the app. */
     --font-xs: 13px;   /* tiny captions, badges */
-    --font-sm: 14px;   /* secondary/muted text, small buttons */
-    --font-base: 15px; /* regular content — the 11pt anchor */
-    --font-md: 18px;   /* subheadings */
-    --font-lg: 20px;   /* section headings */
-    --font-xl: 25px;   /* wordmark/logo */
+    --font-sm: 15px;   /* secondary/muted text, small buttons */
+    --font-base: 16px; /* regular content — the 12pt anchor */
+    --font-md: 19px;   /* subheadings */
+    --font-lg: 21px;   /* section headings */
+    --font-xl: 27px;   /* wordmark/logo */
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -405,7 +405,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.14.1";
+const APP_VERSION = "1.15.0";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -432,6 +432,7 @@ let state = {
   sortSheetColumnId: null, // columnId whose sort-options sheet is open, or null
   myTasksFirstColumns: JSON.parse(localStorage.getItem("twoDoMyTasksFirst") || "{}"), // personal per-device view toggle, columnId -> bool; never synced to Firebase
   wordWrap: localStorage.getItem("twoDoWordWrap") !== "false", // personal per-device preference, defaults on; never synced to Firebase
+  overdueHighlight: localStorage.getItem("twoDoOverdueHighlight") !== "false", // personal per-device preference, defaults on; never synced to Firebase
   collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
   theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
   connected: false,     // live Firebase RTDB connection status
@@ -925,6 +926,12 @@ window.toggleWordWrap = () => {
   render();
 };
 
+window.toggleOverdueHighlight = () => {
+  state.overdueHighlight = !state.overdueHighlight;
+  try { localStorage.setItem("twoDoOverdueHighlight", String(state.overdueHighlight)); } catch (e) {}
+  render();
+};
+
 // ---------- columns manager ----------
 
 window.openColumnsManager = () => {
@@ -1327,9 +1334,13 @@ function renderSettingsSheet(h) {
           <span>Theme</span>
           <button class="code-btn" onclick="cycleTheme()">${themeLabel}</button>
         </div>
-        <div class="settings-row" style="margin-bottom: var(--space-3);">
+        <div class="settings-row">
           <span>Word Wrap</span>
           <button class="code-btn" onclick="toggleWordWrap()">${state.wordWrap ? "On" : "Off"}</button>
+        </div>
+        <div class="settings-row" style="margin-bottom: var(--space-3);">
+          <span>Highlight Overdue</span>
+          <button class="code-btn" onclick="toggleOverdueHighlight()">${state.overdueHighlight ? "On" : "Off"}</button>
         </div>
         <button class="btn-secondary" style="width:100%; margin-top:14px; justify-content:center;" onclick="openManageHousehold()">Manage Household</button>
         <button class="btn-secondary" style="width:100%; margin-top:10px; justify-content:center;" onclick="openColumnsManager()">Manage Columns</button>
@@ -1641,7 +1652,7 @@ function renderChip(task, members, doneColumnId) {
   const assigneeMember = members[task.assignee];
   const isDone = task.columnId === doneColumnId;
   const todayIso = (() => { const n = new Date(); return isoDateFor(n.getFullYear(), n.getMonth(), n.getDate()); })();
-  const isOverdue = !isDone && task.dueDate && task.dueDate < todayIso;
+  const isOverdue = state.overdueHighlight && !isDone && task.dueDate && task.dueDate < todayIso;
   return `
     <div class="chip ${isDone ? "done" : ""}" id="chip-${task.id}" data-task-id="${task.id}" data-column-id="${task.columnId}"
          draggable="true"
