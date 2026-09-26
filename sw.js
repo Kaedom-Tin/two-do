@@ -1,57 +1,1679 @@
-// Two Do — app shell service worker.
-// Bump CACHE_NAME whenever index.html or any shell file changes, so clients pick up
-// the new version instead of serving a stale cached copy indefinitely.
-const CACHE_NAME = "two-do-shell-v19";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#3D5A80">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-any-192.png" type="image/png">
+<link rel="apple-touch-icon" href="./icon-any-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Two Do">
+<title>Two Do — v1.8.1</title>
+<style>
+  :root {
+    --bg: #ECF1F8;
+    --surface: #FFFFFF;
+    --border: #94AED1;
+    --text: #111C2C;
+    --text-muted: #374D6C;
+    --heading: #1C3F6E;
+    --accent: #3D5A80;
+    --accent-contrast: #FFFFFF;
+    --danger: #B3261E;
+    --danger-solid: #B3261E;
+    --col-bg: #B5C9E3;
 
-const SHELL_PATHS = [
-  "./",
-  "./index.html",
-  "./manifest.json",
-  "./icon-any-192.png",
-  "./icon-any-512.png",
-  "./icon-maskable-192.png",
-  "./icon-maskable-512.png"
-];
-const CDN_URLS = [
-  "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
-  "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
-  "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"
-];
-const SHELL_URLS = SHELL_PATHS.map((p) => new URL(p, self.location).href).concat(CDN_URLS);
+    /* Spacing scale — 4px base. Every gap/padding/margin in this file uses one of these. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)));
-  self.skipWaiting();
+    /* Corner-radius scale */
+    --radius-sm: 6px;   /* small badges, arrow buttons */
+    --radius-md: 10px;  /* buttons, inputs, chips */
+    --radius-lg: 14px;  /* cards, columns */
+    --radius-xl: 18px;  /* bottom sheets */
+    --radius-full: 999px; /* circles, pills */
+
+    --divider: #E1E5EA; /* neutral light grey — deliberately not blue-tinted, for a calmer row separator */
+
+    /* Elevation — tinted with --text rather than plain black, to keep shadows on-hue */
+    --shadow-lg: 0 10px 30px rgba(17,28,44,0.18), 0 2px 8px rgba(17,28,44,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0A101A;
+      --surface: #2B3E5A;
+      --border: #3B5172;
+      --text: #E9EFF7;
+      --text-muted: #97AAC4;
+      --heading: #9ABFEA;
+      --accent: #6C93BF;
+      --accent-contrast: #0C121B;
+      --danger: #F39A92;
+      --danger-solid: #C1443D;
+      --col-bg: #1C2A40;
+      --divider: #3D4A5E;
+      --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0A101A;
+    --surface: #2B3E5A;
+    --border: #3B5172;
+    --text: #E9EFF7;
+    --text-muted: #97AAC4;
+    --heading: #9ABFEA;
+    --accent: #6C93BF;
+    --accent-contrast: #0C121B;
+    --danger: #F39A92;
+    --danger-solid: #C1443D;
+    --col-bg: #1C2A40;
+    --divider: #3D4A5E;
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible,
+  select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: var(--radius-md);
+  }
+  input, textarea, select {
+    font-family: inherit; font-size: 16px;
+  }
+  #app { min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* --- Centered screens (loading / sign-in / setup) --- */
+  .center-screen {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: var(--space-6); text-align: center; gap: var(--space-4);
+  }
+  .wordmark { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
+  .tagline { color: var(--text-muted); font-size: 15px; margin-top: calc(-1 * var(--space-2)); }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-contrast);
+    padding: var(--space-3) var(--space-5); font-size: 15px; font-weight: 600; border-radius: var(--radius-md);
+    display: inline-flex; align-items: center; gap: var(--space-3);
+  }
+  .btn-secondary {
+    background: var(--col-bg); color: var(--text); border: 1px solid var(--border);
+    padding: var(--space-3) var(--space-5); font-size: 15px; font-weight: 600; border-radius: var(--radius-md);
+  }
+  .btn-text { background: none; color: var(--accent); font-size: 14px; font-weight: 600; padding: var(--space-2); }
+  .google-icon { width: 18px; height: 18px; background: #fff; border-radius: 4px; padding: 2px; }
+
+  .setup-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: var(--space-5); width: 100%; max-width: 360px; text-align: left;
+    box-shadow: var(--shadow-lg);
+  }
+  .setup-card h2 { margin: 0 0 var(--space-1); font-size: 18px; }
+  .setup-card p.hint { color: var(--text-muted); font-size: 13px; margin: 0 0 var(--space-4); }
+  .field { margin-bottom: var(--space-4); }
+  .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: var(--space-2); }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--bg); color: var(--text);
+  }
+  .error-msg { color: var(--danger); font-size: 13px; margin-top: var(--space-2); }
+  .setup-toggle { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+  .setup-toggle button {
+    flex: 1; padding: var(--space-3); background: var(--col-bg); font-size: 14px; font-weight: 600; color: var(--text-muted);
+  }
+  .setup-toggle button.active { background: var(--accent); color: var(--accent-contrast); }
+
+  /* --- Calendar view --- */
+  .calendar-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) var(--space-4); background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .calendar-month-label { font-weight: 700; font-size: 16px; color: var(--heading); }
+  .calendar-weekday-row {
+    display: grid; grid-template-columns: repeat(7, 1fr); padding: var(--space-2) var(--space-3) 0;
+  }
+  .calendar-weekday { text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+  .calendar-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1);
+    padding: var(--space-2) var(--space-3) var(--space-4);
+  }
+  .calendar-cell {
+    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: flex-start; padding-top: var(--space-2);
+    border-radius: var(--radius-sm); cursor: pointer; position: relative; gap: 2px;
+  }
+  .calendar-cell.empty { cursor: default; }
+  .calendar-day-num {
+    font-size: 13px; color: var(--text);
+    width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: var(--radius-full);
+  }
+  .calendar-cell.today .calendar-day-num {
+    color: var(--accent-contrast); background: var(--accent);
+  }
+  .calendar-day-badge-slot { height: 15px; display: flex; align-items: center; justify-content: center; }
+  .calendar-day-badge {
+    font-size: 10px; font-weight: 700; color: #fff; background: var(--heading);
+    border-radius: var(--radius-full); min-width: 15px; height: 15px; padding: 0 3px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .calendar-day-tasks { display: none; width: 100%; }
+  .calendar-task-row {
+    font-size: 9px; line-height: 12px; color: var(--text); text-align: left; padding: 0 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
+  }
+  .calendar-task-row:active { background: var(--col-bg); border-radius: 3px; }
+  .calendar-more-row { font-size: 9px; line-height: 12px; color: var(--text-muted); padding: 0 3px; }
+  .calendar-body { flex: 1; overflow-y: auto; }
+  .calendar-undated-section { padding: var(--space-4) var(--space-4) 0; }
+  .calendar-undated-heading {
+    font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.3px; margin-bottom: var(--space-1);
+  }
+
+  @media (orientation: landscape) {
+    .calendar-cell { aspect-ratio: auto; min-height: 74px; align-items: stretch; padding: var(--space-1); }
+    .calendar-day-num { align-self: flex-start; margin-left: 2px; }
+    .calendar-day-badge-slot { display: none; }
+    .calendar-day-tasks { display: block; }
+  }
+
+  /* --- Board screen --- */
+  .board-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) var(--space-4); background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .board-header .title { font-size: 17px; font-weight: 700; color: var(--text); }
+  .icon-btn {
+    background: none; color: var(--text); padding: var(--space-2); display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  /* --- Settings sheet --- */
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) 0; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .settings-row:last-of-type { border-bottom: none; }
+  .settings-row .code-btn {
+    background: var(--col-bg); color: var(--text); padding: var(--space-1) var(--space-3); font-size: 12px;
+    font-weight: 700; letter-spacing: 0.5px; border-radius: var(--radius-sm);
+  }
+  .sync-badge { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; color: var(--text-muted); }
+  .sync-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--text-muted); }
+  .sync-dot.online { background: #3A9A5C; }
+  .sync-dot.offline { background: var(--danger); }
+
+  /* --- Columns manager --- */
+  .col-manager-list { display: flex; flex-direction: column; gap: var(--space-2); max-height: 50vh; overflow-y: auto; }
+  .col-manager-row { display: flex; align-items: center; gap: var(--space-2); }
+  .col-manager-arrows { display: flex; flex-direction: column; gap: var(--space-1); }
+  .arrow-btn {
+    background: var(--col-bg); color: var(--text); padding: var(--space-1); border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .arrow-btn svg { width: 14px; height: 14px; }
+  .arrow-btn:disabled { opacity: 0.3; cursor: default; }
+  .col-name-input {
+    flex: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--bg); color: var(--text); font-size: 14px; min-width: 0;
+  }
+  .col-delete-btn {
+    background: none; color: var(--danger); padding: var(--space-2); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .col-delete-btn svg { width: 16px; height: 16px; }
+  .col-delete-hint { font-size: 11px; color: var(--text-muted); flex-shrink: 0; max-width: 90px; line-height: 1.3; }
+
+  /* --- Manage household --- */
+  .member-list { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+  .member-row { display: flex; align-items: center; gap: var(--space-2); }
+  .member-swatch {
+    width: 26px; height: 26px; border-radius: var(--radius-full); color: #fff;
+    font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .member-name { flex: 1; font-size: 14px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-role { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+  .avatar-color-grid { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
+  .avatar-swatch-btn {
+    width: 32px; height: 32px; border-radius: var(--radius-full); border: 3px solid transparent;
+    padding: 0;
+  }
+  .avatar-swatch-btn.selected { border-color: var(--text); }
+
+  .board-stack {
+    flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: var(--space-6);
+  }
+  .column {
+    background: none;
+  }
+  .column-header {
+    padding: var(--space-2) 0 var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+    cursor: pointer;
+  }
+  .column-header .name { font-weight: 700; font-size: 14px; letter-spacing: 0.2px; text-transform: uppercase; color: var(--heading); }
+  .column-header .count { font-size: 12px; color: var(--text-muted); margin-left: var(--space-2); font-weight: 500; }
+  .column-header .chevron { transition: transform 0.15s ease; color: var(--text-muted); flex-shrink: 0; }
+  .column-header .chevron svg { width: 18px; height: 18px; display: block; }
+  .header-add-btn {
+    background: none; color: var(--heading); padding: var(--space-1); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm);
+  }
+  .header-add-btn svg { width: 18px; height: 18px; display: block; }
+  .column.collapsed .chevron { transform: rotate(-90deg); }
+  .column-body { padding: 0 0 var(--space-2); display: flex; flex-direction: column; gap: 0; }
+  .empty-col { color: var(--text-muted); font-size: 13px; text-align: center; padding: var(--space-4) var(--space-1); }
+
+  .chip {
+    background: var(--surface); border-bottom: 2px solid var(--divider);
+    padding: var(--space-3); font-size: 14px; cursor: grab; color: var(--text);
+    display: flex; align-items: center; gap: var(--space-3);
+  }
+  .chip:first-child { border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md); }
+  .chip:last-child { border-bottom-left-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); border-bottom: none; }
+  .chip.done .chip-title { text-decoration: line-through; color: var(--text-muted); }
+  .chip.dragging { opacity: 0.35; }
+  .chip.drag-over { border: 2px dashed var(--accent); background: var(--col-bg); }
+  .column-body.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
+  .chip-tick {
+    width: 16px; height: 16px; border-radius: var(--radius-full); border: 2px solid var(--text-muted);
+    background: var(--surface); flex-shrink: 0; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chip-tick svg { width: 9px; height: 9px; display: none; color: var(--accent-contrast); }
+  .chip.done .chip-tick { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .chip.done .chip-tick svg { display: block; }
+  .chip-content { flex: 1; min-width: 0; }
+  .chip-title { font-weight: 600; line-height: 1.3; color: var(--text); }
+  .chip-assignee {
+    width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--accent); color: #fff;
+    font-size: 7px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .chip-due { font-size: 11px; color: var(--text-muted); }
+
+  /* --- Bottom-sheet overlay (chip expand / add task) --- */
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50;
+    display: flex; align-items: flex-end;
+  }
+  .sheet-card {
+    background: var(--surface); width: 100%; max-height: 85vh; overflow-y: auto;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
+    box-shadow: var(--shadow-lg);
+  }
+  .sheet-card h2 { margin: 0 0 var(--space-3); font-size: 16px; }
+  .chip-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
+  .chip-actions .btn-primary, .chip-actions .btn-secondary { padding: var(--space-3) var(--space-4); font-size: 14px; flex: 1; justify-content: center; }
+  .delete-link { color: var(--danger); background: none; font-size: 13px; font-weight: 600; padding: var(--space-2); width: 100%; margin-top: var(--space-1); }
+  .delete-confirm {
+    display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-3);
+    background: var(--col-bg); border-radius: var(--radius-md);
+  }
+  .delete-confirm span { flex: 1; font-size: 13px; font-weight: 600; }
+  .delete-confirm .btn-secondary, .delete-confirm .btn-danger { padding: var(--space-2) var(--space-3); font-size: 13px; }
+  .btn-danger { background: var(--danger-solid); color: #fff; font-weight: 600; }
+
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: var(--radius-full); animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="center-screen"><div class="spinner"></div></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import {
+  getDatabase, ref, get, set, update, push, remove, onValue, increment
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA0t4HwloOzdHM9yTtRsRHWyBJuKvG8SoE",
+  authDomain: "two-do-family.firebaseapp.com",
+  databaseURL: "https://two-do-family-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "two-do-family",
+  storageBucket: "two-do-family.firebasestorage.app",
+  messagingSenderId: "181758224160",
+  appId: "1:181758224160:web:e9eba63bf138d0070a1945"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const provider = new GoogleAuthProvider();
+
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
+const CODE_LENGTH = 8;
+const APP_VERSION = "1.8.1";
+const MAX_COLUMNS = 10;
+// Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
+const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
+
+const appEl = document.getElementById("app");
+
+let state = {
+  user: undefined,     // undefined = auth state not yet resolved; null = confirmed signed out
+  householdId: null,
+  household: null,     // { meta, members, columns }
+  tasks: {},           // taskId -> task
+  expanded: null,       // taskId or "new-<columnId>" currently expanded
+  confirmingDelete: null, // taskId currently showing the delete confirm step, or null
+  setupMode: "create",  // "create" | "join"
+  setupError: "",
+  settingsOpen: false,
+  columnsManagerOpen: false,
+  manageHouseholdOpen: false,
+  view: "board", // "board" | "calendar"
+  calendarYear: null,   // set on first open to the current year
+  calendarMonth: null,  // 0-indexed, set on first open to the current month
+  calendarSelectedDay: null, // ISO date string ("YYYY-MM-DD") whose task sheet is open, or null
+  calendarUndatedColumnId: null, // columnId whose no-due-date task sheet is open, or null
+  sortSheetColumnId: null, // columnId whose sort-options sheet is open, or null
+  myTasksFirstColumns: JSON.parse(localStorage.getItem("twoDoMyTasksFirst") || "{}"), // personal per-device view toggle, columnId -> bool; never synced to Firebase
+  collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
+  theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
+  connected: false,     // live Firebase RTDB connection status
+  householdsChecked: false // becomes true once we've checked whether the signed-in user belongs to a household
+};
+
+function applyTheme() {
+  if (state.theme === "system") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    document.documentElement.setAttribute("data-theme", state.theme);
+  }
+}
+applyTheme();
+
+// ---------- offline: local cache + write queue ----------
+// The Firebase SDK already auto-queues writes in memory while offline and resends them
+// on reconnect — but only if the tab stays open. If the app is closed or reloaded while
+// offline, that in-memory queue is lost. These localStorage-backed helpers cover that gap,
+// and double as a read cache so the board can render immediately even before any network
+// connection is established (e.g. opening the app while offline).
+const CACHE_PREFIX = "twoDoCache:";
+const QUEUE_KEY = "twoDoWriteQueue";
+
+function loadCache(uid) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + uid);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function persistCache() {
+  if (!state.user || !state.householdId) return;
+  try {
+    localStorage.setItem(CACHE_PREFIX + state.user.uid, JSON.stringify({
+      householdId: state.householdId, household: state.household, tasks: state.tasks
+    }));
+  } catch (e) { /* storage full or unavailable — cache is best-effort */ }
+}
+
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; }
+}
+function saveQueue() {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(writeQueue)); } catch (e) {}
+}
+let writeQueue = loadQueue();
+
+function sendWrite(item) {
+  const r = item.path ? ref(db, item.path) : ref(db);
+  if (item.type === "update") return update(r, item.data);
+  if (item.type === "set") return set(r, item.data);
+  if (item.type === "remove") return remove(r);
+}
+
+// Every mutation in the app goes through here instead of calling update/set/remove
+// directly. Online, it fires immediately. Offline, it's queued (persisted, so it survives
+// a closed tab) — the caller is expected to have already applied the change optimistically
+// to local state before calling this, so the UI never blocks on network either way.
+function queueOrSend(type, path, data) {
+  if (state.connected) {
+    sendWrite({ type, path, data }).catch(() => {
+      writeQueue.push({ id: crypto.randomUUID(), type, path, data });
+      saveQueue();
+    });
+  } else {
+    writeQueue.push({ id: crypto.randomUUID(), type, path, data });
+    saveQueue();
+    render();
+  }
+}
+
+async function flushQueue() {
+  if (writeQueue.length === 0) return;
+  const pending = [...writeQueue];
+  for (const item of pending) {
+    try {
+      await sendWrite(item);
+      writeQueue = writeQueue.filter(w => w.id !== item.id);
+      saveQueue();
+    } catch (e) {
+      break; // keep remaining items queued in order, retry on the next reconnect
+    }
+  }
+  render();
+}
+
+let wasConnected = false;
+onValue(ref(db, ".info/connected"), (snap) => {
+  const nowConnected = snap.val() === true;
+  const justReconnected = nowConnected && !wasConnected;
+  wasConnected = nowConnected;
+  state.connected = nowConnected;
+  if (justReconnected) flushQueue();
+  render();
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
-    )
-  );
-  self.clients.claim();
+let householdListenerUnsub = null;
+let tasksListenerUnsub = null;
+
+// ---------- helpers ----------
+
+function generateCode() {
+  let code = "";
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+function initials(name) {
+  if (!name) return "?";
+  return name.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase();
+}
+
+function formatDateDMY(isoDate) {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+// ---------- auth ----------
+
+onAuthStateChanged(auth, (user) => {
+  state.user = user;
+  detachListeners();
+  state.householdId = null;
+  state.household = null;
+  state.tasks = {};
+  state.householdsChecked = false;
+  if (user) {
+    const cached = loadCache(user.uid);
+    if (cached && cached.householdId) {
+      // Render instantly from the last-known state, then attach live listeners (which
+      // quietly wait for connectivity if we're offline) to bring it up to date.
+      state.householdId = cached.householdId;
+      state.household = cached.household;
+      state.tasks = cached.tasks || {};
+      state.householdsChecked = true;
+      attachHouseholdListeners(cached.householdId);
+      render();
+    } else {
+      loadUserHouseholds(user.uid);
+    }
+  } else {
+    render();
+  }
 });
 
-self.addEventListener("fetch", (event) => {
-  // Only ever handle the app shell itself (this file's own HTML/JS/icons, plus the
-  // pinned Firebase SDK files). Everything else — Firebase's live database and auth
-  // traffic in particular — passes straight through untouched, so real-time sync
-  // and sign-in keep working exactly as normal.
-  if (event.request.method !== "GET" || !SHELL_URLS.includes(event.request.url)) return;
+async function loadUserHouseholds(uid) {
+  const snap = await get(ref(db, `users/${uid}/householdIds`));
+  state.householdsChecked = true;
+  if (snap.exists()) {
+    const ids = Object.keys(snap.val());
+    state.householdId = ids[0]; // v0.1.0: single household per user
+    attachHouseholdListeners(state.householdId);
+  }
+  render();
+}
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkFetch = fetch(event.request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
-  );
-});
+function attachHouseholdListeners(householdId) {
+  householdListenerUnsub = onValue(ref(db, `households/${householdId}`), (snap) => {
+    state.household = snap.val();
+    persistCache();
+    render();
+    reconcileColumnCounts();
+  });
+  tasksListenerUnsub = onValue(ref(db, `households/${householdId}/tasks`), (snap) => {
+    state.tasks = snap.val() || {};
+    persistCache();
+    render();
+    reconcileColumnCounts();
+  });
+}
+
+// Keeps each column's `taskCount` field (used by the security rules to block deleting
+// a column that still holds tasks) in sync with reality. Recomputed from the live task
+// list rather than incremented per-operation, so it can't drift out of sync even if some
+// code path forgets to touch it, and it self-heals older columns that never had the field.
+function reconcileColumnCounts() {
+  if (!state.connected || !state.household || !state.household.columns) return;
+  const counts = {};
+  Object.values(state.tasks).forEach(t => { counts[t.columnId] = (counts[t.columnId] || 0) + 1; });
+  const updates = {};
+  Object.entries(state.household.columns).forEach(([colId, col]) => {
+    const actual = counts[colId] || 0;
+    if ((col.taskCount || 0) !== actual) {
+      updates[`households/${state.householdId}/columns/${colId}/taskCount`] = actual;
+    }
+  });
+  const actualColumnCount = Object.keys(state.household.columns).length;
+  if ((state.household.columnCount || 0) !== actualColumnCount) {
+    updates[`households/${state.householdId}/columnCount`] = actualColumnCount;
+  }
+  if (Object.keys(updates).length > 0) {
+    update(ref(db), updates).catch(() => { /* another online member will reconcile it instead */ });
+  }
+}
+
+function detachListeners() {
+  if (householdListenerUnsub) { householdListenerUnsub(); householdListenerUnsub = null; }
+  if (tasksListenerUnsub) { tasksListenerUnsub(); tasksListenerUnsub = null; }
+}
+
+window.handleSignIn = async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+window.handleSignOut = async () => {
+  await signOut(auth);
+};
+
+// ---------- household create / join ----------
+
+window.setSetupMode = (mode) => {
+  state.setupMode = mode;
+  state.setupError = "";
+  render();
+};
+
+window.handleCreateHousehold = async (formEl) => {
+  const name = formEl.householdName.value.trim();
+  if (!name) { state.setupError = "Enter a household name."; render(); return; }
+  if (!state.connected) { state.setupError = "You'll need a connection to create a household."; render(); return; }
+  const uid = state.user.uid;
+  const displayName = state.user.displayName || state.user.email || "Member";
+
+  const newRef = push(ref(db, "households"));
+  const householdId = newRef.key;
+
+  let code = generateCode();
+  let attempts = 0;
+  while ((await get(ref(db, `joinCodes/${code}`))).exists() && attempts < 10) {
+    code = generateCode();
+    attempts++;
+  }
+
+  const now = Date.now();
+  await set(newRef, {
+    meta: { name, createdBy: uid, createdAt: now, code },
+    members: {
+      [uid]: { role: "admin", joinedAt: now, displayName, color: AVATAR_COLORS[0] }
+    },
+    columns: {
+      col1: { name: "To Do", order: 0 },
+      col2: { name: "In Progress", order: 1 },
+      col3: { name: "Done", order: 2 }
+    }
+  });
+  await set(ref(db, `joinCodes/${code}`), householdId);
+  await set(ref(db, `users/${uid}/householdIds/${householdId}`), true);
+
+  state.householdId = householdId;
+  attachHouseholdListeners(householdId);
+};
+
+window.handleJoinHousehold = async (formEl) => {
+  const rawCode = formEl.joinCode.value.trim().toUpperCase();
+  if (rawCode.length !== CODE_LENGTH) {
+    state.setupError = `Code should be ${CODE_LENGTH} characters.`;
+    render();
+    return;
+  }
+  if (!state.connected) { state.setupError = "You'll need a connection to join a household."; render(); return; }
+  const snap = await get(ref(db, `joinCodes/${rawCode}`));
+  if (!snap.exists()) {
+    state.setupError = "That code wasn't found. Check it and try again.";
+    render();
+    return;
+  }
+  const householdId = snap.val();
+  const uid = state.user.uid;
+  const displayName = state.user.displayName || state.user.email || "Member";
+  const now = Date.now();
+
+  await set(ref(db, `households/${householdId}/members/${uid}`), {
+    role: "member", joinedAt: now, displayName, color: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
+  });
+  await set(ref(db, `users/${uid}/householdIds/${householdId}`), true);
+
+  state.householdId = householdId;
+  attachHouseholdListeners(householdId);
+};
+
+window.copyCode = async (code, btnEl) => {
+  let copied = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(code);
+      copied = true;
+    }
+  } catch (e) { /* fall through to legacy fallback below */ }
+
+  if (!copied) {
+    // Fallback for browsers/webviews without a working Clipboard API.
+    try {
+      const tmp = document.createElement("textarea");
+      tmp.value = code;
+      tmp.style.position = "fixed";
+      tmp.style.opacity = "0";
+      document.body.appendChild(tmp);
+      tmp.select();
+      copied = document.execCommand("copy");
+      document.body.removeChild(tmp);
+    } catch (e) { /* give up silently, still show feedback below is skipped */ }
+  }
+
+  if (btnEl) {
+    const original = btnEl.textContent;
+    btnEl.textContent = copied ? "Copied!" : "Copy failed";
+    setTimeout(() => { btnEl.textContent = original; }, 1500);
+  }
+};
+
+window.openSettings = () => {
+  state.settingsOpen = true;
+  render();
+};
+
+window.closeSettings = () => {
+  state.settingsOpen = false;
+  render();
+};
+
+window.setTheme = (theme) => {
+  state.theme = theme;
+  localStorage.setItem("twoDoTheme", theme);
+  applyTheme();
+  render();
+};
+
+window.cycleTheme = () => {
+  const modes = ["system", "light", "dark"];
+  const next = modes[(modes.indexOf(state.theme) + 1) % modes.length];
+  setTheme(next);
+};
+
+window.handleRenameHousehold = async (newName) => {
+  const name = newName.trim();
+  if (!name) return; // ignore blank rename attempts, keep the existing name
+  state.household.meta.name = name; // optimistic
+  persistCache();
+  render();
+  queueOrSend("update", `households/${state.householdId}/meta`, { name });
+};
+
+window.openManageHousehold = () => {
+  state.settingsOpen = false;
+  state.manageHouseholdOpen = true;
+  render();
+};
+
+window.closeManageHousehold = () => {
+  state.manageHouseholdOpen = false;
+  render();
+};
+
+window.handleSetAvatarColor = async (color) => {
+  const uid = state.user.uid;
+  state.household.members[uid].color = color; // optimistic
+  persistCache();
+  render();
+  queueOrSend("update", `households/${state.householdId}/members/${uid}`, { color });
+};
+
+// ---------- calendar ----------
+
+window.openCalendar = () => {
+  const now = new Date();
+  if (state.calendarYear === null) {
+    state.calendarYear = now.getFullYear();
+    state.calendarMonth = now.getMonth();
+  }
+  state.view = "calendar";
+  state.calendarSelectedDay = null;
+  render();
+};
+
+window.closeCalendar = () => {
+  state.view = "board";
+  render();
+};
+
+window.calendarPrevMonth = () => {
+  state.calendarMonth -= 1;
+  if (state.calendarMonth < 0) { state.calendarMonth = 11; state.calendarYear -= 1; }
+  render();
+};
+
+window.calendarNextMonth = () => {
+  state.calendarMonth += 1;
+  if (state.calendarMonth > 11) { state.calendarMonth = 0; state.calendarYear += 1; }
+  render();
+};
+
+window.openCalendarDay = (dateStr) => {
+  state.calendarSelectedDay = dateStr;
+  render();
+};
+
+window.closeCalendarDay = () => {
+  state.calendarSelectedDay = null;
+  render();
+};
+
+window.openUndatedTasks = (columnId) => {
+  state.calendarUndatedColumnId = columnId;
+  render();
+};
+
+window.closeUndatedTasks = () => {
+  state.calendarUndatedColumnId = null;
+  render();
+};
+
+// ---------- sort ----------
+
+window.openSortSheet = (columnId) => {
+  state.sortSheetColumnId = columnId;
+  render();
+};
+
+window.closeSortSheet = () => {
+  state.sortSheetColumnId = null;
+  render();
+};
+
+window.applySortColumn = async (columnId, mode) => {
+  const tasks = Object.entries(state.tasks)
+    .filter(([id, t]) => t.columnId === columnId)
+    .map(([id, t]) => ({ id, ...t }))
+    .sort((a, b) => a.order - b.order); // establish current order as the stable baseline for ties below
+
+  let sorted;
+  if (mode === "az") {
+    sorted = [...tasks].sort((a, b) => a.title.localeCompare(b.title));
+  } else { // "date" — undated tasks go to the end, keeping their current relative order among themselves
+    sorted = [...tasks].sort((a, b) => {
+      if (a.dueDate && b.dueDate) return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0;
+      if (a.dueDate && !b.dueDate) return -1;
+      if (!a.dueDate && b.dueDate) return 1;
+      return 0; // same date (or both undated) — keep current relative order, established by the pre-sort above
+    });
+  }
+
+  const updates = {};
+  sorted.forEach((t, idx) => {
+    updates[`households/${state.householdId}/tasks/${t.id}/order`] = idx;
+    if (state.tasks[t.id]) state.tasks[t.id].order = idx; // optimistic
+  });
+  persistCache();
+  state.sortSheetColumnId = null;
+  render();
+  queueOrSend("update", "", updates);
+};
+
+window.toggleMyTasksFirst = (columnId) => {
+  state.myTasksFirstColumns[columnId] = !state.myTasksFirstColumns[columnId];
+  try { localStorage.setItem("twoDoMyTasksFirst", JSON.stringify(state.myTasksFirstColumns)); } catch (e) {}
+  render();
+};
+
+// ---------- columns manager ----------
+
+window.openColumnsManager = () => {
+  state.settingsOpen = false;
+  state.columnsManagerOpen = true;
+  render();
+};
+
+window.closeColumnsManager = () => {
+  state.columnsManagerOpen = false;
+  render();
+};
+
+window.handleAddColumn = async (formEl) => {
+  const name = formEl.columnName.value.trim();
+  if (!name) return;
+  const columns = Object.values(state.household.columns || {});
+  if (columns.length >= MAX_COLUMNS) return;
+  const maxOrder = columns.reduce((max, c) => Math.max(max, c.order), -1);
+  const newId = push(ref(db, `households/${state.householdId}/columns`)).key;
+  const newColumn = { name, order: maxOrder + 1 };
+  state.household.columns[newId] = newColumn; // optimistic
+  state.household.columnCount = (state.household.columnCount || 0) + 1;
+  persistCache();
+  render();
+  formEl.reset();
+  const updates = {};
+  updates[`households/${state.householdId}/columns/${newId}`] = newColumn;
+  updates[`households/${state.householdId}/columnCount`] = increment(1);
+  queueOrSend("update", "", updates);
+};
+
+window.handleRenameColumn = async (columnId, newName) => {
+  const name = newName.trim();
+  if (!name) return; // ignore blank rename attempts, keep the existing name
+  if (state.household.columns[columnId]) {
+    state.household.columns[columnId].name = name; // optimistic
+    persistCache();
+  }
+  queueOrSend("update", `households/${state.householdId}/columns/${columnId}`, { name });
+};
+
+window.handleMoveColumn = async (columnId, direction) => {
+  const columns = Object.entries(state.household.columns || {})
+    .map(([id, c]) => ({ id, ...c }))
+    .sort((a, b) => a.order - b.order);
+  const idx = columns.findIndex(c => c.id === columnId);
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (idx === -1 || swapIdx < 0 || swapIdx >= columns.length) return;
+
+  const a = columns[idx];
+  const b = columns[swapIdx];
+  const updates = {};
+  updates[`households/${state.householdId}/columns/${a.id}/order`] = b.order;
+  updates[`households/${state.householdId}/columns/${b.id}/order`] = a.order;
+  state.household.columns[a.id].order = b.order; // optimistic
+  state.household.columns[b.id].order = a.order;
+  persistCache();
+  render();
+  queueOrSend("update", "", updates);
+};
+
+window.handleDeleteColumn = async (columnId) => {
+  const col = state.household.columns[columnId];
+  const isDoneCol = col && (col.name || "").trim().toLowerCase() === "done";
+  if (isDoneCol) return; // Done can never be deleted, guarded in the UI too
+  const hasTasks = Object.values(state.tasks).some(t => t.columnId === columnId);
+  if (hasTasks) return; // guarded in the UI too, but double-check before writing
+  delete state.household.columns[columnId]; // optimistic
+  state.household.columnCount = Math.max(0, (state.household.columnCount || 1) - 1);
+  persistCache();
+  render();
+  const updates = {};
+  updates[`households/${state.householdId}/columns/${columnId}`] = null; // null deletes via update()
+  updates[`households/${state.householdId}/columnCount`] = increment(-1);
+  queueOrSend("update", "", updates);
+};
+
+// ---------- drag to reorder / move chips ----------
+// Same technique as Basket: native HTML5 Drag and Drop (draggable="true" + the five
+// standard drag events), not hand-rolled Pointer Events. The browser itself decides
+// whether a touch is a scroll or a drag, so normal scrolling-from-a-chip keeps working
+// for free. Known limitation (same as Basket): iPhone Safari does not support triggering
+// this via touch — fine for now since the household is all on Android.
+let dragTaskId = null;
+let dragSourceColumnId = null;
+
+window.chipDragStart = (e, taskId, columnId) => {
+  dragTaskId = taskId;
+  dragSourceColumnId = columnId;
+  e.dataTransfer.effectAllowed = "move";
+  // Delay adding the dimmed style so the browser captures a normal-looking drag
+  // image before the source chip visually dims (same trick Basket uses).
+  const chipId = "chip-" + taskId;
+  setTimeout(() => { const el = document.getElementById(chipId); if (el) el.classList.add("dragging"); }, 0);
+};
+
+window.chipDragEnd = () => {
+  dragTaskId = null;
+  dragSourceColumnId = null;
+  document.querySelectorAll(".dragging, .drag-over").forEach(el => el.classList.remove("dragging", "drag-over"));
+};
+
+window.chipDragOver = (e, taskId) => {
+  if (!dragTaskId || dragTaskId === taskId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  document.querySelectorAll(".chip.drag-over, .column-body.drag-over").forEach(el => el.classList.remove("drag-over"));
+  e.currentTarget.classList.add("drag-over");
+};
+
+window.chipDragLeave = (e) => {
+  e.currentTarget.classList.remove("drag-over");
+};
+
+window.chipDrop = async (e, beforeTaskId, targetColumnId) => {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove("drag-over");
+  if (!dragTaskId || dragTaskId === beforeTaskId) return;
+  await moveTask(dragTaskId, targetColumnId, beforeTaskId);
+};
+
+// Dropping directly on a column's body (not on a specific chip) — used for an empty
+// column, or for dropping past the last chip to append at the end of the list.
+window.columnBodyDragOver = (e, columnId) => {
+  if (!dragTaskId) return;
+  e.preventDefault();
+  document.querySelectorAll(".chip.drag-over, .column-body.drag-over").forEach(el => el.classList.remove("drag-over"));
+  e.currentTarget.classList.add("drag-over");
+};
+
+window.columnBodyDrop = async (e, columnId) => {
+  e.preventDefault();
+  e.currentTarget.classList.remove("drag-over");
+  if (!dragTaskId) return;
+  await moveTask(dragTaskId, columnId, null); // null = append at the end
+};
+
+async function moveTask(taskId, targetColumnId, beforeTaskId) {
+  const task = state.tasks[taskId];
+  if (!task) return;
+
+  const columns = Object.entries(state.household.columns || {}).map(([id, c]) => ({ id, ...c })).sort((a, b) => a.order - b.order);
+  const doneColumnId = getDoneColumnId(columns);
+
+  const siblings = Object.entries(state.tasks)
+    .filter(([id, t]) => t.columnId === targetColumnId && id !== taskId)
+    .map(([id, t]) => ({ id, ...t }))
+    .sort((a, b) => a.order - b.order);
+
+  let newOrder;
+  if (siblings.length === 0) {
+    newOrder = Date.now();
+  } else if (beforeTaskId === null) {
+    newOrder = siblings[siblings.length - 1].order + 1;
+  } else {
+    const idx = siblings.findIndex(s => s.id === beforeTaskId);
+    const next = siblings[idx];
+    const prev = siblings[idx - 1];
+    newOrder = prev ? (prev.order + next.order) / 2 : next.order - 1;
+  }
+
+  const updates = { columnId: targetColumnId, order: newOrder };
+  if (targetColumnId === doneColumnId && task.columnId !== doneColumnId) {
+    updates.previousColumnId = task.columnId;
+    updates.doneAt = Date.now();
+  } else if (task.columnId === doneColumnId && targetColumnId !== doneColumnId) {
+    updates.doneAt = null;
+  }
+
+  state.tasks[taskId] = { ...task, ...updates }; // optimistic
+  persistCache();
+  render();
+  queueOrSend("update", `households/${state.householdId}/tasks/${taskId}`, updates);
+}
+
+// ---------- tasks ----------
+
+window.toggleExpand = (key) => {
+  state.expanded = (state.expanded === key) ? null : key;
+  state.confirmingDelete = null;
+  render();
+};
+
+window.closeSheet = () => {
+  state.expanded = null;
+  state.confirmingDelete = null;
+  render();
+};
+
+window.requestDeleteConfirm = (taskId) => {
+  state.confirmingDelete = taskId;
+  render();
+};
+
+window.cancelDeleteConfirm = () => {
+  state.confirmingDelete = null;
+  render();
+};
+
+window.handleAddTask = async (columnId, formEl) => {
+  const title = formEl.title.value.trim();
+  if (!title) return;
+  const notes = formEl.notes.value.trim();
+  const assignee = formEl.assignee.value;
+  const dueDate = formEl.dueDate.value;
+
+  const newId = push(ref(db, `households/${state.householdId}/tasks`)).key;
+  const newTask = { title, notes, assignee, dueDate, columnId, order: Date.now(), updatedAt: Date.now() };
+  state.tasks[newId] = newTask; // optimistic
+  persistCache();
+  state.expanded = null;
+  render();
+  queueOrSend("set", `households/${state.householdId}/tasks/${newId}`, newTask);
+};
+
+window.handleSaveTask = async (taskId, formEl) => {
+  const title = formEl.title.value.trim();
+  if (!title) return;
+  const updates = {
+    title,
+    notes: formEl.notes.value.trim(),
+    assignee: formEl.assignee.value,
+    dueDate: formEl.dueDate.value,
+    updatedAt: Date.now()
+  };
+  state.tasks[taskId] = { ...state.tasks[taskId], ...updates }; // optimistic
+  persistCache();
+  state.expanded = null;
+  render();
+  queueOrSend("update", `households/${state.householdId}/tasks/${taskId}`, updates);
+};
+
+window.handleDeleteTask = async (taskId) => {
+  delete state.tasks[taskId]; // optimistic
+  persistCache();
+  state.expanded = null;
+  state.confirmingDelete = null;
+  render();
+  queueOrSend("remove", `households/${state.householdId}/tasks/${taskId}`, null);
+};
+
+window.toggleColumnCollapsed = (columnId) => {
+  state.collapsedColumns[columnId] = !state.collapsedColumns[columnId];
+  render();
+};
+
+window.handleToggleDone = async (taskId, event) => {
+  if (event) event.stopPropagation();
+  const task = state.tasks[taskId];
+  if (!task) return;
+
+  const columns = Object.entries(state.household.columns || {}).map(([id, c]) => ({ id, ...c })).sort((a, b) => a.order - b.order);
+  const doneColumnId = getDoneColumnId(columns);
+  const firstColumnId = columns.length ? columns[0].id : null;
+
+  let updates;
+  if (task.columnId === doneColumnId) {
+    // Currently done — send it back to wherever it was before, or the first column if unknown.
+    updates = { columnId: task.previousColumnId || firstColumnId, doneAt: null };
+  } else {
+    // Mark done — move into the Done column, remembering where it came from.
+    updates = { columnId: doneColumnId, previousColumnId: task.columnId, doneAt: Date.now() };
+  }
+
+  // Optimistic local update so the tick feels instant regardless of connectivity.
+  state.tasks[taskId] = { ...task, ...updates };
+  persistCache();
+  render();
+  queueOrSend("update", `households/${state.householdId}/tasks/${taskId}`, updates);
+};
+
+// ---------- render ----------
+
+function render() {
+  if (state.user === undefined) return; // auth state not resolved yet — keep showing the initial spinner
+  if (!state.user) return renderSignIn();
+  if (!state.householdsChecked) return; // still checking whether they belong to a household — keep spinner
+  if (state.householdId && !state.household) return; // household exists but its data hasn't arrived yet — keep spinner
+  if (!state.householdId || !state.household) return renderSetup();
+  if (state.view === "calendar") return renderCalendarView();
+  return renderBoard();
+}
+
+function renderSignIn() {
+  appEl.innerHTML = `
+    <div class="center-screen">
+      <div class="wordmark">Two Do</div>
+      <div class="tagline">One list, everyone in the house.</div>
+      <button class="btn-primary" onclick="handleSignIn()">
+        <svg class="google-icon" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4c-7.6 0-14.1 4.3-17.4 10.7z"/><path fill="#4CAF50" d="M24 44c5.4 0 10.3-1.8 14-5l-6.5-5.5C29.4 35 26.9 36 24 36c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5C9.8 39.6 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.5l6.5 5.5C40.8 36.5 44 30.9 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+        Sign in with Google
+      </button>
+    </div>`;
+}
+
+function renderSetup() {
+  const isCreate = state.setupMode === "create";
+  appEl.innerHTML = `
+    <div class="center-screen">
+      <div class="wordmark" style="font-size:20px;">Two Do</div>
+      <div class="setup-card">
+        <div class="setup-toggle">
+          <button class="${isCreate ? "active" : ""}" onclick="setSetupMode('create')">Create household</button>
+          <button class="${!isCreate ? "active" : ""}" onclick="setSetupMode('join')">Join household</button>
+        </div>
+        ${isCreate ? `
+          <h2>Start a new household</h2>
+          <p class="hint">You'll get a code to share with family so they can join.</p>
+          <form onsubmit="event.preventDefault(); handleCreateHousehold(this);">
+            <div class="field">
+              <label>Household name</label>
+              <input name="householdName" placeholder="e.g. The Smiths" autocomplete="off" required>
+            </div>
+            <button class="btn-primary" style="width:100%; justify-content:center;" type="submit">Create household</button>
+          </form>
+        ` : `
+          <h2>Join a household</h2>
+          <p class="hint">Enter the ${CODE_LENGTH}-character code someone shared with you.</p>
+          <form onsubmit="event.preventDefault(); handleJoinHousehold(this);">
+            <div class="field">
+              <label>Household code</label>
+              <input name="joinCode" placeholder="e.g. 7F3KQ2XR" maxlength="${CODE_LENGTH}" style="text-transform:uppercase; letter-spacing:1px;" autocomplete="off" required>
+            </div>
+            <button class="btn-primary" style="width:100%; justify-content:center;" type="submit">Join household</button>
+          </form>
+        `}
+        ${state.setupError ? `<div class="error-msg">${escapeHtml(state.setupError)}</div>` : ""}
+      </div>
+      <button class="btn-text" onclick="handleSignOut()">Sign out</button>
+    </div>`;
+}
+
+function getDoneColumnId(columns) {
+  const named = columns.find(c => (c.name || "").trim().toLowerCase() === "done");
+  if (named) return named.id;
+  // Fallback: the last column by order, in case it's been renamed.
+  return columns.length ? columns[columns.length - 1].id : null;
+}
+
+function renderBoard() {
+  const h = state.household;
+  const columns = Object.entries(h.columns || {})
+    .map(([id, c]) => ({ id, ...c }))
+    .sort((a, b) => a.order - b.order);
+  const doneColumnId = getDoneColumnId(columns);
+  const members = h.members || {};
+  const tasksByColumn = {};
+  Object.entries(state.tasks).forEach(([id, t]) => {
+    if (!tasksByColumn[t.columnId]) tasksByColumn[t.columnId] = [];
+    tasksByColumn[t.columnId].push({ id, ...t });
+  });
+  Object.values(tasksByColumn).forEach(list => list.sort((a, b) => a.order - b.order));
+
+  appEl.innerHTML = `
+    <div class="board-header">
+      <div class="title">${escapeHtml(h.meta.name)} <span style="font-weight:400; color:var(--text-muted); font-size:13px;">v${APP_VERSION}</span></div>
+      <div style="display:flex; align-items:center; gap: var(--space-1);">
+        <button class="icon-btn" onclick="openCalendar()" aria-label="Calendar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+        </button>
+        <button class="icon-btn" onclick="openSettings()" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="board-stack">
+      ${columns.map(col => renderColumn(col, tasksByColumn[col.id] || [], members, doneColumnId)).join("")}
+    </div>
+    ${renderSheet(members)}
+    ${state.settingsOpen ? renderSettingsSheet(h) : ""}
+    ${state.columnsManagerOpen ? renderColumnsManagerSheet(h, tasksByColumn) : ""}
+    ${state.manageHouseholdOpen ? renderManageHouseholdSheet(h) : ""}
+    ${state.sortSheetColumnId ? renderSortSheet(state.sortSheetColumnId) : ""}`;
+}
+
+function renderSettingsSheet(h) {
+  const themeLabel = state.theme.charAt(0).toUpperCase() + state.theme.slice(1);
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeSettings();">
+      <div class="sheet-card">
+        <h2>Settings</h2>
+        <div class="settings-row">
+          <span>Sync Status</span>
+          <span class="sync-badge">
+            <span class="sync-dot ${state.connected ? "online" : "offline"}"></span>
+            ${state.connected ? "Synced" : (writeQueue.length > 0 ? `Offline · ${writeQueue.length} pending` : "Offline")}
+          </span>
+        </div>
+        <div class="settings-row">
+          <span>Theme</span>
+          <button class="code-btn" onclick="cycleTheme()">${themeLabel}</button>
+        </div>
+        <button class="btn-secondary" style="width:100%; margin-top:14px; justify-content:center;" onclick="openManageHousehold()">Manage Household</button>
+        <button class="btn-secondary" style="width:100%; margin-top:10px; justify-content:center;" onclick="openColumnsManager()">Manage Columns</button>
+        <button class="btn-secondary" style="width:100%; margin-top:10px; justify-content:center;" onclick="handleSignOut()">Sign Out</button>
+      </div>
+    </div>`;
+}
+
+function renderColumnsManagerSheet(h, tasksByColumn) {
+  const columns = Object.entries(h.columns || {})
+    .map(([id, c]) => ({ id, ...c }))
+    .sort((a, b) => a.order - b.order);
+  const atMax = columns.length >= MAX_COLUMNS;
+
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeColumnsManager();">
+      <div class="sheet-card">
+        <h2>Manage Columns</h2>
+        <div class="col-manager-list">
+          ${columns.map((col, idx) => {
+            const occupied = (tasksByColumn[col.id] || []).length > 0;
+            const isDoneCol = (col.name || "").trim().toLowerCase() === "done";
+            return `
+              <div class="col-manager-row">
+                <div class="col-manager-arrows">
+                  <button class="arrow-btn" ${idx === 0 ? "disabled" : ""} onclick="handleMoveColumn('${col.id}','up')" aria-label="Move up">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                  </button>
+                  <button class="arrow-btn" ${idx === columns.length - 1 ? "disabled" : ""} onclick="handleMoveColumn('${col.id}','down')" aria-label="Move down">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                </div>
+                <input class="col-name-input" value="${escapeHtml(col.name)}" onchange="handleRenameColumn('${col.id}', this.value)">
+                ${isDoneCol
+                  ? `<span class="col-delete-hint">Done can't be deleted</span>`
+                  : occupied
+                  ? `<span class="col-delete-hint">Move or clear tasks first</span>`
+                  : `<button class="col-delete-btn" onclick="handleDeleteColumn('${col.id}')" aria-label="Delete column">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+                    </button>`
+                }
+              </div>`;
+          }).join("")}
+        </div>
+        <form onsubmit="event.preventDefault(); handleAddColumn(this);" style="margin-top:14px;">
+          <div class="field" style="display:flex; gap:8px; align-items:flex-start;">
+            <input name="columnName" placeholder="New column name" style="flex:1;" ${atMax ? "disabled" : ""} maxlength="30">
+            <button type="submit" class="btn-primary" style="padding:10px 16px;" ${atMax ? "disabled" : ""}>Add</button>
+          </div>
+        </form>
+        ${atMax ? `<p class="hint" style="margin:2px 0 0;">Maximum of ${MAX_COLUMNS} columns reached.</p>` : ""}
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeColumnsManager()">Done</button>
+      </div>
+    </div>`;
+}
+
+function renderManageHouseholdSheet(h) {
+  const members = Object.entries(h.members || {}).map(([uid, m]) => ({ uid, ...m }));
+  const myUid = state.user.uid;
+  const myColor = (h.members[myUid] && h.members[myUid].color) || AVATAR_COLORS[0];
+
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeManageHousehold();">
+      <div class="sheet-card">
+        <h2>Manage Household</h2>
+        <div class="settings-row" style="display:block;">
+          <span>Household name</span>
+          <input class="col-name-input" style="width:100%; margin-top: var(--space-2);" value="${escapeHtml(h.meta.name)}" onchange="handleRenameHousehold(this.value)">
+        </div>
+        <div class="settings-row">
+          <span>Invite code</span>
+          <button class="code-btn" onclick="copyCode('${h.meta.code}', this)">${h.meta.code}</button>
+        </div>
+        <div class="settings-row" style="display:block;">
+          <span>People in this household</span>
+          <div class="member-list">
+            ${members.map(m => `
+              <div class="member-row">
+                <div class="member-swatch" style="background:${m.color || "var(--accent)"};">${initials(m.displayName)}</div>
+                <span class="member-name">${escapeHtml(m.displayName)}</span>
+                <span class="member-role">${m.role === "admin" ? "Admin" : "Member"}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+        <div class="settings-row" style="display:block;">
+          <span>Your avatar colour</span>
+          <div class="avatar-color-grid">
+            ${AVATAR_COLORS.map(c => `
+              <button class="avatar-swatch-btn ${c === myColor ? "selected" : ""}" style="background:${c};" onclick="handleSetAvatarColor('${c}')" aria-label="Choose this colour"></button>
+            `).join("")}
+          </div>
+        </div>
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeManageHousehold()">Done</button>
+      </div>
+    </div>`;
+}
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTH_LABELS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function isoDateFor(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function renderCalendarView() {
+  const h = state.household;
+  const columns = Object.entries(h.columns || {}).map(([id, c]) => ({ id, ...c })).sort((a, b) => a.order - b.order);
+  const doneColumnId = getDoneColumnId(columns);
+  const members = h.members || {};
+
+  // Active (not-done) tasks with a due date, grouped by ISO date string.
+  const tasksByDate = {};
+  Object.entries(state.tasks).forEach(([id, t]) => {
+    if (!t.dueDate || t.columnId === doneColumnId) return;
+    if (!tasksByDate[t.dueDate]) tasksByDate[t.dueDate] = [];
+    tasksByDate[t.dueDate].push({ id, ...t });
+  });
+
+  const year = state.calendarYear, month = state.calendarMonth;
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7; // Mon=0 .. Sun=6
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayIso = (() => { const n = new Date(); return isoDateFor(n.getFullYear(), n.getMonth(), n.getDate()); })();
+
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  // Columns other than Done, with a count of their active tasks that have no due date.
+  const undatedByColumn = columns.filter(c => c.id !== doneColumnId).map(c => ({
+    ...c,
+    count: Object.values(state.tasks).filter(t => t.columnId === c.id && !t.dueDate).length
+  }));
+
+  appEl.innerHTML = `
+    <div class="board-header">
+      <button class="icon-btn" onclick="closeCalendar()" aria-label="Back to board">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <div class="title">Calendar</div>
+      <div style="width:22px;"></div>
+    </div>
+    <div class="calendar-nav">
+      <button class="icon-btn" onclick="calendarPrevMonth()" aria-label="Previous month">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <div class="calendar-month-label">${MONTH_LABELS[month]} ${year}</div>
+      <button class="icon-btn" onclick="calendarNextMonth()" aria-label="Next month">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    </div>
+    <div class="calendar-body">
+      <div class="calendar-weekday-row">
+        ${WEEKDAY_LABELS.map(l => `<div class="calendar-weekday">${l}</div>`).join("")}
+      </div>
+      <div class="calendar-grid">
+        ${cells.map(day => {
+          if (day === null) return `<div class="calendar-cell empty"></div>`;
+          const dateStr = isoDateFor(year, month, day);
+          const dayTasks = (tasksByDate[dateStr] || []).sort((a, b) => a.order - b.order);
+          const isToday = dateStr === todayIso;
+          const shown = dayTasks.slice(0, 3);
+          const hasMore = dayTasks.length > 3;
+          return `
+            <div class="calendar-cell ${isToday ? "today" : ""}" onclick="openCalendarDay('${dateStr}')">
+              <div class="calendar-day-num">${day}</div>
+              <div class="calendar-day-badge-slot">${dayTasks.length > 0 ? `<div class="calendar-day-badge">${dayTasks.length > 9 ? "9+" : dayTasks.length}</div>` : ""}</div>
+              <div class="calendar-day-tasks">
+                ${shown.map(t => `<div class="calendar-task-row" onclick="event.stopPropagation(); toggleExpand('${t.id}')">${escapeHtml(truncateLine(t.title))}</div>`).join("")}
+                ${hasMore ? `<div class="calendar-more-row">...</div>` : ""}
+              </div>
+            </div>`;
+        }).join("")}
+      </div>
+      <div class="calendar-undated-section">
+        <div class="calendar-undated-heading">No due date</div>
+        ${undatedByColumn.map(c => `
+          <div class="settings-row" style="cursor:pointer;" onclick="openUndatedTasks('${c.id}')">
+            <span>${escapeHtml(c.name)}</span>
+            <span class="chip-due">${c.count}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+    ${state.calendarSelectedDay ? renderCalendarDaySheet(state.calendarSelectedDay, tasksByDate[state.calendarSelectedDay] || [], members, doneColumnId) : ""}
+    ${state.calendarUndatedColumnId ? renderUndatedTasksSheet(state.calendarUndatedColumnId, members, doneColumnId) : ""}
+    ${renderSheet(members)}`;
+}
+
+function renderCalendarDaySheet(dateStr, tasks, members, doneColumnId) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const label = `${d} ${MONTH_LABELS[m - 1]} ${y}`;
+  const sorted = [...tasks].sort((a, b) => a.order - b.order);
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeCalendarDay();">
+      <div class="sheet-card">
+        <h2>${label}</h2>
+        ${sorted.length === 0
+          ? `<div class="empty-col">Nothing due this day.</div>`
+          : `<div class="column-body" style="padding:0;">${sorted.map(t => renderChip(t, members, doneColumnId)).join("")}</div>`
+        }
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeCalendarDay()">Close</button>
+      </div>
+    </div>`;
+}
+
+function renderUndatedTasksSheet(columnId, members, doneColumnId) {
+  const col = state.household.columns[columnId];
+  const tasks = Object.entries(state.tasks)
+    .filter(([id, t]) => t.columnId === columnId && !t.dueDate)
+    .map(([id, t]) => ({ id, ...t }))
+    .sort((a, b) => a.order - b.order);
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeUndatedTasks();">
+      <div class="sheet-card">
+        <h2>${escapeHtml(col ? col.name : "")} · No due date</h2>
+        ${tasks.length === 0
+          ? `<div class="empty-col">Nothing here.</div>`
+          : `<div class="column-body" style="padding:0;">${tasks.map(t => renderChip(t, members, doneColumnId)).join("")}</div>`
+        }
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeUndatedTasks()">Close</button>
+      </div>
+    </div>`;
+}
+
+function renderSortSheet(columnId) {
+  const col = state.household.columns[columnId];
+  const myTasksFirst = !!state.myTasksFirstColumns[columnId];
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeSortSheet();">
+      <div class="sheet-card">
+        <h2>Sort ${escapeHtml(col ? col.name : "")}</h2>
+        <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 var(--space-4);">These reorder the tasks for everyone — a one-time sort, not a live filter.</p>
+        <button class="btn-secondary" style="width:100%; justify-content:center;" onclick="applySortColumn('${columnId}', 'az')">A–Z</button>
+        <button class="btn-secondary" style="width:100%; margin-top:10px; justify-content:center;" onclick="applySortColumn('${columnId}', 'date')">Date (undated last)</button>
+        <div class="settings-row" style="margin-top: var(--space-4);">
+          <span>My Tasks First</span>
+          <button class="code-btn" onclick="toggleMyTasksFirst('${columnId}')">${myTasksFirst ? "On" : "Off"}</button>
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px; margin: var(--space-1) 0 0;">Just for you — a personal view on this device, doesn't change anyone else's order.</p>
+        <button class="btn-secondary" style="width:100%; margin-top:16px; justify-content:center;" onclick="closeSortSheet()">Close</button>
+      </div>
+    </div>`;
+}
+
+function renderColumn(col, tasks, members, doneColumnId) {
+  const isCollapsed = !!state.collapsedColumns[col.id];
+  const isDoneColumn = col.id === doneColumnId;
+  let sorted = isDoneColumn
+    ? [...tasks].sort((a, b) => (b.doneAt || b.order || 0) - (a.doneAt || a.order || 0))
+    : [...tasks].sort((a, b) => a.order - b.order);
+
+  if (!isDoneColumn && state.myTasksFirstColumns[col.id]) {
+    const myUid = state.user.uid;
+    sorted = [...sorted].sort((a, b) => (a.assignee === myUid ? 0 : 1) - (b.assignee === myUid ? 0 : 1));
+  }
+
+  return `
+    <div class="column ${isCollapsed ? "collapsed" : ""}">
+      <div class="column-header" onclick="toggleColumnCollapsed('${col.id}')">
+        <div style="display:flex; align-items:baseline;">
+          <div class="name">${escapeHtml(col.name)}</div>
+          <div class="count">${sorted.length}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap: var(--space-2);">
+          ${isDoneColumn ? "" : `
+            <button class="header-add-btn" onclick="event.stopPropagation(); openSortSheet('${col.id}');" aria-label="Sort">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="14" y2="7"></line><line x1="4" y1="12" x2="11" y2="12"></line><line x1="4" y1="17" x2="8" y2="17"></line><polyline points="17 5 17 19"></polyline><polyline points="14 16 17 19 20 16"></polyline></svg>
+            </button>
+          `}
+          <button class="header-add-btn" onclick="event.stopPropagation(); toggleExpand('new-${col.id}');" aria-label="Add task">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <div class="chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
+      </div>
+      ${isCollapsed ? "" : `
+        <div class="column-body" data-column-id="${col.id}"
+             ondragover="columnBodyDragOver(event, '${col.id}')" ondrop="columnBodyDrop(event, '${col.id}')">
+          ${sorted.length === 0 ? `<div class="empty-col">Nothing here.</div>` : ""}
+          ${sorted.map(t => renderChip(t, members, doneColumnId)).join("")}
+        </div>
+      `}
+    </div>`;
+}
+
+function truncateLine(line) {
+  return line.length > 20 ? line.slice(0, 20) + "..." : line;
+}
+
+function renderChip(task, members, doneColumnId) {
+  const assigneeMember = members[task.assignee];
+  const isDone = task.columnId === doneColumnId;
+  return `
+    <div class="chip ${isDone ? "done" : ""}" id="chip-${task.id}" data-task-id="${task.id}" data-column-id="${task.columnId}"
+         draggable="true"
+         ondragstart="chipDragStart(event, '${task.id}', '${task.columnId}')"
+         ondragend="chipDragEnd()"
+         ondragover="chipDragOver(event, '${task.id}')"
+         ondragleave="chipDragLeave(event)"
+         ondrop="chipDrop(event, '${task.id}', '${task.columnId}')"
+         onclick="toggleExpand('${task.id}')">
+      <div class="chip-tick" onclick="handleToggleDone('${task.id}', event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+      <div class="chip-content">
+        <div class="chip-title">${escapeHtml(task.title)}</div>
+      </div>
+      ${assigneeMember ? `<div class="chip-assignee" style="background:${assigneeMember.color || "var(--accent)"};">${initials(assigneeMember.displayName)}</div>` : ""}
+    </div>`;
+}
+
+// Renders the bottom-sheet overlay for either editing an existing task
+// (state.expanded === taskId) or adding a new one (state.expanded === "new-<columnId>").
+// Returns "" when nothing is expanded, so it's safe to always call from renderBoard.
+function renderSheet(members) {
+  if (!state.expanded) return "";
+
+  const memberOptions = (selectedUid) => Object.entries(members).map(([uid, m]) => `
+    <option value="${uid}" ${selectedUid === uid ? "selected" : ""}>${escapeHtml(m.displayName)}</option>
+  `).join("");
+
+  if (state.expanded.startsWith("new-")) {
+    const columnId = state.expanded.slice(4);
+    return `
+      <div class="sheet-backdrop" onclick="if(event.target===this) closeSheet();">
+        <div class="sheet-card">
+          <h2>Add task</h2>
+          <form onsubmit="event.preventDefault(); handleAddTask('${columnId}', this);">
+            <div class="field">
+              <label>Title</label>
+              <input name="title" placeholder="Task title" autofocus required>
+            </div>
+            <div class="field">
+              <label>Assignee</label>
+              <select name="assignee"><option value="">Unassigned</option>${memberOptions(null)}</select>
+            </div>
+            <div class="field">
+              <label>Due date</label>
+              <input type="date" name="dueDate" onclick="this.showPicker && this.showPicker()">
+            </div>
+            <div class="field">
+              <label>Notes</label>
+              <textarea name="notes" rows="2" placeholder="Optional"></textarea>
+            </div>
+            <div class="chip-actions">
+              <button type="submit" class="btn-primary">Add task</button>
+              <button type="button" class="btn-secondary" onclick="closeSheet()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+  }
+
+  const task = state.tasks[state.expanded];
+  if (!task) return "";
+  return `
+    <div class="sheet-backdrop" onclick="if(event.target===this) closeSheet();">
+      <div class="sheet-card">
+        <h2>Edit task</h2>
+        <form onsubmit="event.preventDefault(); handleSaveTask('${state.expanded}', this);">
+          <div class="field">
+            <label>Title</label>
+            <input name="title" value="${escapeHtml(task.title)}" required>
+          </div>
+          <div class="field">
+            <label>Assignee</label>
+            <select name="assignee"><option value="">Unassigned</option>${memberOptions(task.assignee)}</select>
+          </div>
+          <div class="field">
+            <label>Due date</label>
+            <input type="date" name="dueDate" value="${task.dueDate || ""}" onclick="this.showPicker && this.showPicker()">
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <textarea name="notes" rows="2">${escapeHtml(task.notes || "")}</textarea>
+          </div>
+          <div class="chip-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" class="btn-secondary" onclick="closeSheet()">Cancel</button>
+          </div>
+        </form>
+        ${state.confirmingDelete === state.expanded ? `
+          <div class="delete-confirm">
+            <span>Delete this task?</span>
+            <button class="btn-secondary" onclick="cancelDeleteConfirm()">Cancel</button>
+            <button class="btn-danger" onclick="handleDeleteTask('${state.expanded}')">Delete</button>
+          </div>
+        ` : `
+          <button class="delete-link" onclick="requestDeleteConfirm('${state.expanded}')">Delete task</button>
+        `}
+      </div>
+    </div>`;
+}
+
+render();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      // Offline app-shell caching just won't be available — the app still works fine online.
+    });
+  });
+}
+</script>
+</body>
+</html>
