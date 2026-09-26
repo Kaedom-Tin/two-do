@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.15.0</title>
+<title>Two Do — v1.15.1</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -197,7 +197,7 @@
 
   @media (orientation: landscape) {
     .calendar-cell { min-height: 150px; align-items: stretch; padding: var(--space-1); }
-    .calendar-day-num { align-self: flex-start; margin-left: 2px; }
+    .calendar-day-num { align-self: center; }
     .calendar-day-badge-slot { display: none; }
     .calendar-day-tasks { display: block; }
   }
@@ -307,12 +307,12 @@
   .chip.drag-over { border: 2px dashed var(--accent); background: var(--col-bg); }
   .column-body.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
   .chip-tick {
-    width: 22px; height: 22px; border-radius: var(--radius-full); border: 2px solid var(--text-muted);
+    width: 20px; height: 20px; border-radius: var(--radius-full); border: 2px solid var(--text-muted);
     background: var(--surface); flex-shrink: 0; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
   }
   .chip-tick.overdue { border-color: var(--danger); }
-  .chip-tick svg { width: 12px; height: 12px; display: none; color: var(--accent-contrast); }
+  .chip-tick svg { width: 11px; height: 11px; display: none; color: var(--accent-contrast); }
   .chip.done .chip-tick { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
   .chip.done .chip-tick svg { display: block; }
   .chip-content { flex: 1; min-width: 0; }
@@ -322,8 +322,8 @@
   }
   .chip-title.wrap { white-space: normal; overflow: visible; text-overflow: clip; }
   .chip-assignee {
-    width: 22px; height: 22px; border-radius: var(--radius-full); background: var(--accent); color: #fff;
-    font-size: var(--font-sm); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: var(--radius-full); background: var(--accent); color: #fff;
+    font-size: var(--font-xs); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .chip-due { font-size: var(--font-xs); color: var(--text-muted); }
 
@@ -405,7 +405,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.15.0";
+const APP_VERSION = "1.15.1";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
