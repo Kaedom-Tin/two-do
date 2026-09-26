@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.14.0</title>
+<title>Two Do — v1.14.1</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -50,12 +50,12 @@
 
     /* Font-size scale — 12px (9pt) is the anchor for regular content (chip titles, labels,
        buttons, body text). Adjust these tokens, not individual rules, to retune the app. */
-    --font-xs: 10px;   /* tiny captions, badges */
-    --font-sm: 11px;   /* secondary/muted text, small buttons */
-    --font-base: 12px; /* regular content — the 9pt anchor */
-    --font-md: 14px;   /* subheadings */
-    --font-lg: 16px;   /* section headings */
-    --font-xl: 20px;   /* wordmark/logo */
+    --font-xs: 13px;   /* tiny captions, badges */
+    --font-sm: 14px;   /* secondary/muted text, small buttons */
+    --font-base: 15px; /* regular content — the 11pt anchor */
+    --font-md: 18px;   /* subheadings */
+    --font-lg: 20px;   /* section headings */
+    --font-xl: 25px;   /* wordmark/logo */
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -405,7 +405,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.14.0";
+const APP_VERSION = "1.14.1";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
