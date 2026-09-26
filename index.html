@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.11.3</title>
+<title>Two Do — v1.12.0</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -145,31 +145,31 @@
   }
   .calendar-month-label { font-weight: 700; font-size: 15px; color: var(--heading); }
   .calendar-weekday-row {
-    display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1);
+    display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1);
     padding: var(--space-2) var(--space-3) 0;
   }
   .calendar-weekday { text-align: center; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
   .calendar-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1);
+    display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1);
     padding: var(--space-2) var(--space-3) var(--space-4);
   }
   .calendar-cell {
-    min-height: 100px; display: flex; flex-direction: column; align-items: center;
+    min-height: 68px; display: flex; flex-direction: column; align-items: center;
     justify-content: flex-start; padding-top: var(--space-2);
     border-radius: var(--radius-sm); cursor: pointer; position: relative; gap: 2px;
   }
   .calendar-cell.empty { cursor: default; }
   .calendar-day-num {
     font-size: 13px; color: var(--text);
-    width: 40px; height: 40px; line-height: 40px; text-align: center; border-radius: var(--radius-full);
+    width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: var(--radius-full);
   }
   .calendar-cell.today .calendar-day-num {
     color: var(--accent-contrast); background: var(--accent);
   }
-  .calendar-day-badge-slot { height: 32px; display: flex; align-items: center; justify-content: center; }
+  .calendar-day-badge-slot { height: 18px; display: flex; align-items: center; justify-content: center; }
   .calendar-day-badge {
     font-size: 10px; font-weight: 700; color: #fff; background: var(--heading);
-    border-radius: var(--radius-full); min-width: 32px; height: 32px; padding: 0 6px;
+    border-radius: var(--radius-full); min-width: 18px; height: 18px; padding: 0 4px;
     display: flex; align-items: center; justify-content: center;
   }
   .calendar-day-tasks { display: none; width: 100%; }
@@ -395,7 +395,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.11.3";
+const APP_VERSION = "1.12.0";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -1317,8 +1317,8 @@ function renderSettingsSheet(h) {
           <span>Theme</span>
           <button class="code-btn" onclick="cycleTheme()">${themeLabel}</button>
         </div>
-        <div class="settings-row">
-          <span>Word Wrap <span style="font-size:7px; font-weight:400; color:var(--text-muted);">— this device only</span></span>
+        <div class="settings-row" style="margin-bottom: var(--space-3);">
+          <span>Word Wrap</span>
           <button class="code-btn" onclick="toggleWordWrap()">${state.wordWrap ? "On" : "Off"}</button>
         </div>
         <button class="btn-secondary" style="width:100%; margin-top:14px; justify-content:center;" onclick="openManageHousehold()">Manage Household</button>
