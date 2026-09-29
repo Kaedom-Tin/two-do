@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Two Do">
-<title>Two Do — v1.16.0</title>
+<title>Two Do — v1.17.1</title>
 <style>
   :root {
     --bg: #ECF1F8;
@@ -259,6 +259,7 @@
   .member-swatch {
     width: 42px; height: 42px; border-radius: var(--radius-full); color: #fff;
     font-size: var(--font-sm); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    padding-bottom: 0.12em;
   }
   .member-name { flex: 1; font-size: var(--font-base); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .member-role { font-size: var(--font-sm); color: var(--text-muted); flex-shrink: 0; }
@@ -325,6 +326,7 @@
   .chip-assignee {
     width: 1.8em; height: 1.8em; border-radius: var(--radius-full); background: var(--accent); color: #fff;
     font-size: var(--font-xxs); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    padding-bottom: 0.12em;
   }
   .chip-due { font-size: var(--font-xs); color: var(--text-muted); }
 
@@ -406,7 +408,7 @@ const provider = new GoogleAuthProvider();
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // excludes 0,O,1,I,L
 const CODE_LENGTH = 8;
-const APP_VERSION = "1.16.0";
+const APP_VERSION = "1.17.1";
 const MAX_COLUMNS = 10;
 // Preset avatar colours — all pre-checked to pass WCAG AA against the white initials text they carry.
 const AVATAR_COLORS = ["#3D5A80", "#2A7F7E", "#3D7A4F", "#8A6D1F", "#B2592E", "#B3365A", "#6B4C9A", "#9C3F7C"];
@@ -434,7 +436,7 @@ let state = {
   myTasksFirstColumns: JSON.parse(localStorage.getItem("twoDoMyTasksFirst") || "{}"), // personal per-device view toggle, columnId -> bool; never synced to Firebase
   wordWrap: localStorage.getItem("twoDoWordWrap") !== "false", // personal per-device preference, defaults on; never synced to Firebase
   overdueHighlight: localStorage.getItem("twoDoOverdueHighlight") !== "false", // personal per-device preference, defaults on; never synced to Firebase
-  collapsedColumns: {}, // columnId -> true when collapsed (defaults to expanded)
+  collapsedColumns: JSON.parse(localStorage.getItem("twoDoCollapsedColumns") || "{}"), // columnId -> true when collapsed (defaults to expanded); persisted per-device
   theme: localStorage.getItem("twoDoTheme") || "system", // "system" | "light" | "dark"
   connected: false,     // live Firebase RTDB connection status
   householdsChecked: false // becomes true once we've checked whether the signed-in user belongs to a household
@@ -1141,8 +1143,12 @@ window.handleAddTask = async (columnId, formEl) => {
   const assignee = formEl.assignee.value;
   const dueDate = formEl.dueDate.value;
 
+  const columnTasks = Object.values(state.tasks).filter(t => t.columnId === columnId);
+  const minOrder = columnTasks.length > 0 ? Math.min(...columnTasks.map(t => t.order)) : Date.now();
+  const newOrder = minOrder - 1; // below the current lowest, so the new task lands at the top
+
   const newId = push(ref(db, `households/${state.householdId}/tasks`)).key;
-  const newTask = { title, notes, assignee, dueDate, columnId, order: Date.now(), updatedAt: Date.now() };
+  const newTask = { title, notes, assignee, dueDate, columnId, order: newOrder, updatedAt: Date.now() };
   state.tasks[newId] = newTask; // optimistic
   persistCache();
   state.expanded = null;
@@ -1178,6 +1184,7 @@ window.handleDeleteTask = async (taskId) => {
 
 window.toggleColumnCollapsed = (columnId) => {
   state.collapsedColumns[columnId] = !state.collapsedColumns[columnId];
+  try { localStorage.setItem("twoDoCollapsedColumns", JSON.stringify(state.collapsedColumns)); } catch (e) {}
   render();
 };
 
@@ -1518,14 +1525,14 @@ function renderCalendarView() {
           const dayTasks = (tasksByDate[dateStr] || []).sort((a, b) => a.order - b.order);
           const isToday = dateStr === todayIso;
           const shown = dayTasks.slice(0, 3);
-          const hasMore = dayTasks.length > 3;
+          const overflowCount = dayTasks.length - shown.length;
           return `
             <div class="calendar-cell ${isToday ? "today" : ""}" onclick="openCalendarDay('${dateStr}')">
               <div class="calendar-day-num">${day}</div>
               <div class="calendar-day-badge-slot">${dayTasks.length > 0 ? `<div class="calendar-day-badge">${dayTasks.length > 9 ? "9+" : dayTasks.length}</div>` : ""}</div>
               <div class="calendar-day-tasks">
                 ${shown.map(t => `<div class="calendar-task-row" onclick="event.stopPropagation(); toggleExpand('${t.id}')">${escapeHtml(truncateLine(t.title))}</div>`).join("")}
-                ${hasMore ? `<div class="calendar-more-row">...</div>` : ""}
+                ${overflowCount > 0 ? `<div class="calendar-more-row">+${overflowCount} more</div>` : ""}
               </div>
             </div>`;
         }).join("")}
